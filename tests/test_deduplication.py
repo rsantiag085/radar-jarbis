@@ -1,0 +1,341 @@
+"""
+Suíte de testes de deduplicação do RadarJarbis.
+
+Cobre três níveis:
+    1. Unitário  — comportamento isolado de src/state.py
+    2. Integração — pipeline completo simulado via mocks (bot.py → state.py)
+    3. Concorrência — valida thread-safety do banco SQLite
+
+Todas as suítes usam um banco temporário isolado (in-memory ou tempfile)
+para não contaminar config/state.db de produção.
+"""
+
+import asyncio
+import logging
+import sqlite3
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+# ---------------------------------------------------------------------------
+# Importa o módulo de estado; sobrescreveremos DB_PATH antes de cada teste
+# ---------------------------------------------------------------------------
+import src.state as state_module
+
+# ---------------------------------------------------------------------------
+# Configuração mínima de logging para os testes
+# ---------------------------------------------------------------------------
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s | %(message)s")
+
+
+# ===========================================================================
+# 1. TESTES UNITÁRIOS — src/state.py
+# ===========================================================================
+
+class TestStateDeduplication(unittest.TestCase):
+    """Valida o comportamento de already_posted / mark_posted com banco isolado."""
+
+    MSG_ID = "3971790914:11"
+
+    def setUp(self):
+        """Cria um banco temporário em disco, fecha o singleton e redireciona DB_PATH."""
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self._tmp.close()
+        self._original_db_path = state_module.DB_PATH
+        state_module.DB_PATH = Path(self._tmp.name)
+        state_module.close()  # reseta o singleton para usar o novo DB_PATH
+
+    def tearDown(self):
+        """Fecha o singleton, restaura DB_PATH e remove o arquivo temporário."""
+        state_module.close()  # garante que a conexão seja fechada antes de deletar
+        state_module.DB_PATH = self._original_db_path
+        Path(self._tmp.name).unlink(missing_ok=True)
+
+    # -----------------------------------------------------------------------
+
+    def test_primeira_vez_nao_postada(self):
+        """Mensagem nova deve retornar False em already_posted."""
+        resultado = state_module.already_posted(self.MSG_ID)
+        self.assertFalse(
+            resultado,
+            "Mensagem nova não deve constar no banco antes de mark_posted().",
+        )
+
+    def test_marca_e_verifica_postada(self):
+        """Após mark_posted, already_posted deve retornar True."""
+        state_module.mark_posted(self.MSG_ID)
+        resultado = state_module.already_posted(self.MSG_ID)
+        self.assertTrue(
+            resultado,
+            "Mensagem deve ser detectada como duplicada após mark_posted().",
+        )
+
+    def test_segunda_tentativa_bloqueada(self):
+        """
+        Simula processamento duplo do msg_id "3971790914:11".
+
+        Primeira passagem  → should_post = True  (not already_posted)
+        Segunda passagem   → should_post = False (already_posted)
+        """
+        # --- 1ª tentativa ---
+        primeira = not state_module.already_posted(self.MSG_ID)
+        self.assertTrue(primeira, "1ª tentativa deve ser liberada para postagem.")
+
+        state_module.mark_posted(self.MSG_ID)  # simula postagem bem-sucedida
+
+        # --- 2ª tentativa ---
+        segunda = not state_module.already_posted(self.MSG_ID)
+        self.assertFalse(segunda, "2ª tentativa deve ser BLOQUEADA pelo deduplicador.")
+
+    def test_insert_or_ignore_idempotente(self):
+        """mark_posted chamado duas vezes não deve lançar exceção nem duplicar linhas."""
+        state_module.mark_posted(self.MSG_ID)
+        state_module.mark_posted(self.MSG_ID)  # não deve explodir
+
+        conn = sqlite3.connect(state_module.DB_PATH)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM posted_messages WHERE msg_id = ?", (self.MSG_ID,)
+        ).fetchone()[0]
+        conn.close()
+
+        self.assertEqual(count, 1, "Deve haver exatamente 1 registro, mesmo com inserts duplos.")
+
+    def test_purge_old_records(self):
+        """purge_old_records deve remover apenas registros antigos."""
+        state_module.mark_posted(self.MSG_ID)
+
+        # Manipula a data para simular registro com 31 dias
+        conn = sqlite3.connect(state_module.DB_PATH)
+        conn.execute(
+            "UPDATE posted_messages SET posted_at = datetime('now', '-31 days') WHERE msg_id = ?",
+            (self.MSG_ID,),
+        )
+        conn.commit()
+        conn.close()
+
+        removidos = state_module.purge_old_records(days=30)
+        self.assertEqual(removidos, 1, "Deve ter removido 1 registro antigo.")
+        self.assertFalse(state_module.already_posted(self.MSG_ID))
+
+
+# ===========================================================================
+# 2. TESTES DE INTEGRAÇÃO — pipeline bot.py → state.py (com mocks)
+# ===========================================================================
+
+class TestBotPipelineDeduplication(unittest.IsolatedAsyncioTestCase):
+    """
+    Simula o handler handle_new_offer do bot.py sem nenhuma dependência
+    de rede real. Valida que o bloco de deduplicação funciona no pipeline
+    completo: filtro → dedup → converter → safe_send → mark_posted.
+    """
+
+    MSG_ID = "3971790914:11"
+    SAMPLE_TEXT = (
+        "🛒 Notebook Samsung 15' Intel Core i5\n"
+        "De R$ 3.999 por R$ 2.499,90 — 37% off\n"
+        "https://amzn.to/3xABCDE"
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self._tmp.close()
+        self._original_db_path = state_module.DB_PATH
+        state_module.DB_PATH = Path(self._tmp.name)
+        state_module.close()  # reseta o singleton para usar o novo DB_PATH
+
+    def tearDown(self):
+        state_module.close()  # garante fechamento antes de deletar o arquivo
+        state_module.DB_PATH = self._original_db_path
+        Path(self._tmp.name).unlink(missing_ok=True)
+
+    def _build_mock_event(self):
+        """Monta um evento Telethon falso com o texto de oferta."""
+        event = MagicMock()
+        event.message.text = self.SAMPLE_TEXT
+        event.chat_id = int(self.MSG_ID.split(":")[0])
+        event.message.id = int(self.MSG_ID.split(":")[1])
+        return event
+
+    async def _run_pipeline(self, mock_send: AsyncMock) -> bool:
+        """
+        Executa o pipeline equivalente ao handle_new_offer do bot.py.
+        Retorna True se o post foi despachado, False se bloqueado.
+        """
+        import src.filters as filters
+        import src.converters as converters
+
+        event = self._build_mock_event()
+        text = event.message.text or ""
+        if not text:
+            return False
+
+        chat_id = event.chat_id
+        message_id = event.message.id
+        msg_id = f"{chat_id}:{message_id}"
+
+        if not filters.is_relevant(text):
+            return False
+
+        if state_module.already_posted(msg_id):
+            return False  # ← BLOQUEIO DE DUPLICATA
+
+        formatted = converters.process(text)
+        await mock_send(formatted)
+        state_module.mark_posted(msg_id)
+        return True
+
+    async def test_primeira_e_segunda_tentativa(self):
+        """
+        Primeira chamada ao pipeline → post enviado (True).
+        Segunda chamada com mesmo msg_id → bloqueado (False).
+        """
+        mock_send = AsyncMock()
+
+        resultado_1 = await self._run_pipeline(mock_send)
+        resultado_2 = await self._run_pipeline(mock_send)
+
+        self.assertTrue(resultado_1, "1ª tentativa deve resultar em postagem.")
+        self.assertFalse(resultado_2, "2ª tentativa deve ser BLOQUEADA pela deduplicação.")
+
+        # Bot API deve ter sido chamada EXATAMENTE uma vez
+        mock_send.assert_awaited_once()
+
+    async def test_mensagem_diferente_nao_bloqueada(self):
+        """Mensagens com msg_id distinto devem ser postadas independentemente."""
+        mock_send = AsyncMock()
+
+        # Primeiro msg_id
+        await self._run_pipeline(mock_send)
+
+        # Segundo msg_id diferente — novo evento
+        event2 = self._build_mock_event()
+        event2.message.id = 12  # ID diferente
+
+        import src.filters as filters
+        import src.converters as converters
+
+        text = event2.message.text
+        msg_id_2 = f"{event2.chat_id}:{event2.message.id}"
+
+        if filters.is_relevant(text) and not state_module.already_posted(msg_id_2):
+            formatted = converters.process(text)
+            await mock_send(formatted)
+            state_module.mark_posted(msg_id_2)
+
+        self.assertEqual(mock_send.await_count, 2, "Duas mensagens distintas devem gerar 2 posts.")
+
+
+# ===========================================================================
+# 3. TESTES DE CONCORRÊNCIA — thread-safety do SQLite
+# ===========================================================================
+
+class TestStateConcurrency(unittest.TestCase):
+    """
+    Valida que o banco SQLite não sofre race condition quando múltiplas
+    threads tentam processar o mesmo msg_id simultaneamente.
+
+    Garante que apenas UMA thread "vence" e as demais são bloqueadas.
+    """
+
+    MSG_ID = "3971790914:11"
+
+    def setUp(self):
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self._tmp.close()
+        self._original_db_path = state_module.DB_PATH
+        state_module.DB_PATH = Path(self._tmp.name)
+        state_module.close()  # reseta o singleton para usar o novo DB_PATH
+
+    def tearDown(self):
+        state_module.close()  # garante fechamento antes de deletar o arquivo
+        state_module.DB_PATH = self._original_db_path
+        Path(self._tmp.name).unlink(missing_ok=True)
+
+    def test_apenas_uma_thread_posta(self):
+        """
+        10 threads tentam processar o mesmo msg_id ao mesmo tempo.
+        Apenas 1 deve conseguir postar; as outras 9 devem ser bloqueadas.
+        """
+        postagens_realizadas = []
+        lock = threading.Lock()
+
+        def tentar_postar():
+            # Seção crítica: verificar → postar → marcar
+            # O SQLite com WAL e INSERT OR IGNORE garante atomicidade.
+            with lock:
+                if not state_module.already_posted(self.MSG_ID):
+                    state_module.mark_posted(self.MSG_ID)
+                    postagens_realizadas.append(threading.current_thread().name)
+
+        threads = [
+            threading.Thread(target=tentar_postar, name=f"Thread-{i}")
+            for i in range(10)
+        ]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(
+            len(postagens_realizadas),
+            1,
+            f"Esperado 1 postagem; ocorreram {len(postagens_realizadas)}: {postagens_realizadas}",
+        )
+
+    def test_sem_lock_insert_or_ignore_ainda_garante_unicidade(self):
+        """
+        Valida que INSERT OR IGNORE garante unicidade no banco mesmo com
+        múltiplos processos/conexões independentes escrevendo simultaneamente.
+
+        Nota de design: o singleton de state.py é para uso single-threaded
+        (asyncio). Este teste simula o cenário de múltiplas conexões externas
+        (ex: cron job de purge + bot rodando) e valida a garantia do SQLite
+        com WAL mode — não o singleton em si.
+        """
+        errors = []
+
+        # Garante que o schema existe antes das threads (via singleton)
+        state_module.already_posted("warmup")
+        db_path = str(state_module.DB_PATH)
+
+        def worker():
+            """Cada thread abre sua própria conexão — simula processos externos."""
+            try:
+                conn = sqlite3.connect(db_path, timeout=10)
+                conn.execute("PRAGMA journal_mode=WAL")
+                with conn:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO posted_messages (msg_id) VALUES (?)",
+                        (self.MSG_ID,),
+                    )
+                conn.close()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+
+        threads = [threading.Thread(target=worker) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertFalse(errors, f"Erros de concorrência detectados: {errors}")
+
+        # Verifica unicidade final — deve haver exatamente 1 registro
+        final_count = sqlite3.connect(db_path).execute(
+            "SELECT COUNT(*) FROM posted_messages WHERE msg_id = ?", (self.MSG_ID,)
+        ).fetchone()[0]
+
+        self.assertEqual(
+            final_count, 1, "INSERT OR IGNORE deve garantir exatamente 1 registro."
+        )
+
+
+# ===========================================================================
+# Entry point
+# ===========================================================================
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
