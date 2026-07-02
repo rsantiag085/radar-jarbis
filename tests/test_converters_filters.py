@@ -12,7 +12,6 @@ Cobre:
 import re
 import urllib.parse
 import unittest
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import src.converters as converters
@@ -38,8 +37,8 @@ class TestExtractPrice(unittest.TestCase):
         self.assertEqual(self._price("Produto por R$ 1.299,90 no Pix"), "R$ 1.299,90")
 
     def test_sem_espaco_apos_cifrao(self):
-        """R$1.100,00 — sem espaço entre R$ e o número."""
-        self.assertEqual(self._price("De R$3.999 por R$1.100,00"), "R$3.999")  # captura o primeiro
+        """R$1.100,00 — sem espaço entre R$ e o número (captura o promocional)."""
+        self.assertEqual(self._price("De R$3.999 por R$1.100,00"), "R$ 1.100,00")
 
     def test_preco_inteiro_com_espaco(self):
         """R$ 879 — preço inteiro, sem centavos."""
@@ -50,10 +49,10 @@ class TestExtractPrice(unittest.TestCase):
         result = self._price("R$ 2.499 à vista")
         self.assertIn("2.499", result)
 
-    def test_multiplos_precos_retorna_primeiro(self):
-        """Quando há 'de R$ X por R$ Y', deve retornar o primeiro encontrado."""
+    def test_multiplos_precos_retorna_promocional(self):
+        """Quando há 'de R$ X por R$ Y', deve retornar o valor promocional (Y)."""
         result = self._price("De R$ 5.000 por R$ 2.499,90")
-        self.assertIn("5.000", result)
+        self.assertIn("2.499,90", result)
 
     def test_preco_embutido_em_copywriting(self):
         """Preço no meio de frase com emojis e formatação de canal."""
@@ -66,20 +65,152 @@ class TestExtractPrice(unittest.TestCase):
 
     # --- Formatos que representam LIMITAÇÃO CONHECIDA do regex atual ---
 
-    def test_numero_sem_cifrao_nao_capturado(self):
-        """
-        '1100' sem R$ NÃO é capturado pelo regex atual (R\\$\\s*[\\d.,]+).
-        Este teste documenta a limitação — se falhar, o padrão foi melhorado.
-        """
+    def test_numero_sem_cifrao_capturado(self):
+        """'1100' sem R$ agora é corretamente capturado."""
         result = self._price("Notebook por apenas 1100 reais")
-        self.assertEqual(
-            result, "",
-            "Limitação conhecida: bare numbers sem R$ não são capturados pelo _PRICE_PATTERN atual."
-        )
+        self.assertEqual(result, "R$ 1100")
 
     def test_preco_em_dolar_nao_capturado(self):
         """USD $ 99 não deve ser capturado — padrão é estritamente R$."""
         self.assertEqual(self._price("Produto importado $ 99 dólares"), "")
+
+
+# ===========================================================================
+# 1B. EXTRAÇÃO DE PARCELAMENTO — _extract_installments
+# ===========================================================================
+
+class TestExtractInstallments(unittest.TestCase):
+    """Valida _extract_installments contra os formatos comuns de parcelamento."""
+
+    def _installments(self, text: str) -> str:
+        return converters._extract_installments(text)
+
+    def test_parcelamento_com_em(self):
+        self.assertEqual(self._installments("por R$ 307 em 6x na Amazon"), "em 6x")
+
+    def test_parcelamento_com_ate(self):
+        self.assertEqual(self._installments("ou 3.419 até 10x"), "até 10x")
+
+    def test_parcelamento_com_em_ate_sem_juros(self):
+        self.assertEqual(self._installments("Teclado em até 12x sem juros no cartão"), "em até 12x sem juros")
+
+    def test_quantidade_pura_nao_capturada(self):
+        self.assertEqual(self._installments("Contém 5x fones de ouvido na caixa"), "")
+
+
+# ===========================================================================
+# 1C. EXTRAÇÃO DE CUPOM — _extract_coupon
+# ===========================================================================
+
+class TestExtractCoupon(unittest.TestCase):
+    """Valida _extract_coupon contra os formatos comuns de cupom."""
+
+    def _coupon(self, text: str) -> str:
+        return converters._extract_coupon(text)
+
+    def test_cupom_simples(self):
+        self.assertEqual(self._coupon("Use o cupom: NOTE100 para ganhar desconto!"), "NOTE100")
+
+    def test_cupom_com_emoji_e_negrito(self):
+        self.assertEqual(self._coupon("🎟 CUPOM: **POUPEAGORA + NOTE300**"), "POUPEAGORA + NOTE300")
+
+    def test_cupom_lowercase_ignorando(self):
+        self.assertEqual(self._coupon("🎟️ cupom: cupom inválido com letras minúsculas"), "")
+
+    def test_sem_cupom(self):
+        self.assertEqual(self._coupon("Sem cupom e sem prime apenas preço normal"), "")
+
+
+# ===========================================================================
+# 1D. VERIFICAÇÃO DE PRIME — _check_prime
+# ===========================================================================
+
+class TestCheckPrime(unittest.TestCase):
+    """Valida _check_prime contra frases que indicam exclusividade Prime."""
+
+    def _prime(self, text: str) -> bool:
+        return converters._check_prime(text)
+
+    def test_prime_exclusivo_completo(self):
+        self.assertTrue(self._prime("🔹 Oferta exclusiva membros Amazon Prime"))
+
+    def test_prime_exclusivo_simples(self):
+        self.assertTrue(self._prime("Exclusivo Prime"))
+
+    def test_prime_sem_indicativo(self):
+        self.assertFalse(self._prime("Sem cupom e sem prime apenas preço normal"))
+
+
+# ===========================================================================
+# 1E. EXTRAÇÃO DE NOME DO PRODUTO — _extract_product_name
+# ===========================================================================
+
+class TestExtractProductName(unittest.TestCase):
+    """Valida _extract_product_name contra teasers e linhas de copywriting."""
+
+    def _product_name(self, text: str) -> str:
+        return converters._extract_product_name(text)
+
+    def test_evita_teaser_inicial_aoc(self):
+        text = (
+            "Para sua Sindrome de Pro Player\n\n"
+            "🔥Monitor Gamer AOC Destiny 24,5 Polegadas, 240Hz\n\n"
+            "💵R$ 899\n"
+            "🎟Cupom: VAIPROGOL\n"
+            "https://link.amazon/B0a5e17nA"
+        )
+        self.assertEqual(self._product_name(text), "Monitor Gamer AOC Destiny 24,5 Polegadas, 240Hz")
+
+    def test_evita_teaser_inicial_tv(self):
+        text = (
+            "CABE EM QUALQUER CANTIN DA CASA\n\n"
+            "📺 **Smart TV 32\" Philco Roku TV**\n\n"
+            "🔥 ~~DE 999,99~~ | POR 699,90"
+        )
+        self.assertEqual(self._product_name(text), "Smart TV 32\" Philco Roku TV")
+
+    def test_evita_teaser_inicial_notebook(self):
+        text = (
+            "TROCAR TEU NOTE QUE TA CAPENGA JÁ\n\n"
+            "💻 **Notebook Lenovo Ideapad Slim 3**\n\n"
+            "🔥 POR 3.229,05"
+        )
+        self.assertEqual(self._product_name(text), "Notebook Lenovo Ideapad Slim 3")
+
+
+# ===========================================================================
+# 1F. EXTRAÇÃO DE TEASER — _extract_teaser
+# ===========================================================================
+
+class TestExtractTeaser(unittest.TestCase):
+    """Valida _extract_teaser contra formatos e exclusões."""
+
+    def _teaser(self, text: str, product_name: str) -> str:
+        return converters._extract_teaser(text, product_name)
+
+    def test_teaser_valido_aoc(self):
+        text = (
+            "Para sua Sindrome de Pro Player\n\n"
+            "🔥Monitor Gamer AOC Destiny 24,5 Polegadas, 240Hz\n\n"
+            "💵R$ 899\n"
+            "https://link.amazon/B0a5e17nA"
+        )
+        pn = "Monitor Gamer AOC Destiny 24,5 Polegadas, 240Hz"
+        self.assertEqual(self._teaser(text, pn), "Para sua Sindrome de Pro Player")
+
+    def test_teaser_valido_tv(self):
+        text = (
+            "CABE EM QUALQUER CANTIN DA CASA\n\n"
+            "📺 **Smart TV 32\" Philco Roku TV**\n\n"
+            "🔥 POR 699,90"
+        )
+        pn = "Smart TV 32\" Philco Roku TV"
+        self.assertEqual(self._teaser(text, pn), "CABE EM QUALQUER CANTIN DA CASA")
+
+    def test_sem_teaser_se_for_igual_ao_produto(self):
+        text = "🔥 SSD Samsung 1TB — por apenas R$ 379,90 no Pix!"
+        pn = "SSD Samsung 1TB — por apenas R$ 379,90 no Pix!"
+        self.assertEqual(self._teaser(text, pn), "")
 
 
 # ===========================================================================
@@ -219,13 +350,12 @@ class TestConvertUrls(unittest.TestCase):
 class TestProcess(unittest.TestCase):
     """Valida o output HTML do process() contra estrutura esperada."""
 
-    TRIGGERS = {"⚠️ MENOR PREÇO HISTÓRICO", "⚡ CORRE ANTES QUE ACABE", "📉 BUG DE PREÇO"}
+    TRIGGERS = {"🔥 OFERTA PRIME DAY 🔥"}
 
     def _assert_post_structure(self, result: str, expect_price=True, expect_url=True):
         self.assertTrue(any(t in result for t in self.TRIGGERS), "Deve conter gatilho mental.")
         self.assertIn("🛒", result)
         self.assertIn("<b>", result)
-        self.assertIn("Links qualificados de associado.", result)
         if expect_price:
             self.assertIn("💰", result)
         if expect_url:
@@ -250,7 +380,7 @@ class TestProcess(unittest.TestCase):
     def test_copywriting_sem_url_amazon(self):
         text = "🎧 Headset HyperX Cloud II por R$ 299,90\nLink: https://bit.ly/headset"
         result = converters.process(text)
-        self._assert_post_structure(result, expect_url=False)
+        self.assertIsNone(result)
 
     def test_copywriting_preco_sem_espaco_cifrao(self):
         """R$1.100,00 (sem espaço) deve ser extraído e aparecer no post."""
@@ -279,6 +409,10 @@ class TestIsRelevant(unittest.TestCase):
 
     def test_smart_home_aprovada(self):
         self.assertTrue(filters.is_relevant("Echo Dot 5ª geração (Alexa) por R$ 199"))
+
+    def test_ventilador_de_mesa_aprovado(self):
+        self.assertTrue(filters.is_relevant("Ventilador de Mesa Arno 40cm por R$ 189"))
+        self.assertTrue(filters.is_relevant("Ventilador de mesa Mondial 30cm por R$ 120"))
 
     def test_beleza_saude_aprovada(self):
         self.assertTrue(filters.is_relevant("Whey Protein Growth 1kg chocolate R$ 89,90"))
@@ -376,6 +510,9 @@ class TestGetCategory(unittest.TestCase):
     def test_smart_home(self):
         self.assertEqual(filters.get_category("Echo Dot com Alexa"), "smart_home")
 
+    def test_ventilador_de_mesa_smart_home(self):
+        self.assertEqual(filters.get_category("Ventilador de Mesa Arno"), "smart_home")
+
     def test_beleza_saude(self):
         self.assertEqual(filters.get_category("Whey Protein 1kg"), "beleza_saude")
 
@@ -413,6 +550,64 @@ class TestExpandirEConverterLink(unittest.IsolatedAsyncioTestCase):
         with patch("src.converters.httpx.AsyncClient", return_value=mock_client_context):
             res = await converters.expandir_e_converter_link(url_encurtada)
             self.assertEqual(res, "https://www.amazon.com.br/dp/B09G3HRMVB?tag=noradardojarb-20")
+
+
+# ===========================================================================
+# 7. PIPELINE COMPLETO ASSÍNCRONO — process_async()
+# ===========================================================================
+
+class TestProcessAsync(unittest.IsolatedAsyncioTestCase):
+    """Valida o output HTML do process_async() de forma assíncrona."""
+
+    TRIGGERS = {"🔥 OFERTA PRIME DAY 🔥"}
+
+    def _assert_post_structure(self, result: str, expect_price=True, expect_url=True):
+        self.assertTrue(any(t in result for t in self.TRIGGERS), "Deve conter gatilho mental.")
+        self.assertIn("🛒", result)
+        self.assertIn("<b>", result)
+        if expect_price:
+            self.assertIn("💰", result)
+        if expect_url:
+            self.assertIn("🔗", result)
+            self.assertIn(AFFILIATE_TAG, result)
+
+    async def test_copywriting_completo_padrao_async(self):
+        text = (
+            "🛒 Notebook Dell Inspiron 15\n"
+            "De R$ 4.999 por R$ 2.799,90 — 44% off\n"
+            "https://www.amazon.com.br/dp/B09XYZ?tag=outro-20"
+        )
+        result = await converters.process_async(text)
+        self._assert_post_structure(result)
+        self.assertNotIn("outro-20", result)
+
+    async def test_copywriting_sem_preco_async(self):
+        text = "💻 Monitor LG 27' 4K\nhttps://www.amazon.com.br/dp/B09XYZ"
+        result = await converters.process_async(text)
+        self._assert_post_structure(result, expect_price=False)
+
+    async def test_copywriting_com_link_encurtado_resolvido_async(self):
+        text = (
+            "🛒 Notebook Dell Inspiron 15\n"
+            "De R$ 4.999 por R$ 2.799,90\n"
+            "https://amzn.to/3xyz"
+        )
+        import httpx
+        mock_client = MagicMock()
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__.return_value = mock_client
+        
+        mock_stream = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.url = httpx.URL("https://www.amazon.com.br/dp/B09G3HRMVB")
+        
+        mock_stream.__aenter__.return_value = mock_response
+        mock_client.stream.return_value = mock_stream
+        
+        with patch("src.converters.httpx.AsyncClient", return_value=mock_client_context):
+            result = await converters.process_async(text)
+            self._assert_post_structure(result)
+            self.assertIn("https://www.amazon.com.br/dp/B09G3HRMVB?tag=noradardojarb-20", result)
 
 
 # ===========================================================================

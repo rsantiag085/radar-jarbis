@@ -1,11 +1,15 @@
 # Variáveis de ambiente — NUNCA versionar
+.env
+.env.*
 config/.env
 
 # Sessão Telethon — equivale a senha da conta Telegram
 config/*.session*
+*.session*
 
 # Banco de estado local
-config/state.db
+config/state.db*
+*.db*
 
 # Cache Python
 __pycache__/
@@ -25,3 +29,6 @@ env/
 
 # Logs
 *.log
+
+# Systemd local config
+radar-jarbis.service

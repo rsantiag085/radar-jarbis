@@ -11,7 +11,7 @@ O "No Radar do Jarbis" (@noradardojarbis) é uma operação de renda extra basea
 Para iniciar a operação e avaliar o volume diário de ofertas, o sistema filtrará estritamente as seguintes categorias:
 1. **Itens de Tecnologia:** Notebooks, monitores, teclados, mouses, baterias portáteis, cadeiras gamer e periféricos em geral.
 2. **Itens Pessoais:** Tênis, perfumes, relógios e body sprays. *(NOTA: Excluir vestuário/roupas nesta fase inicial; avaliar inclusão no futuro)*.
-3. **Itens para Casa (Smart Home):** Smart TVs, robôs aspiradores, fechaduras eletrônicas e dispositivos inteligentes. *(NOTA: Excluir eletrodomésticos e utensílios de cozinha nesta fase inicial; avaliar inclusão no futuro)*.
+3. **Itens para Casa (Smart Home):** Smart TVs, robôs aspiradores, fechaduras eletrônicas, dispositivos inteligentes e ventilador de mesa (independente de marca). *(NOTA: Excluir outros eletrodomésticos e utensílios de cozinha nesta fase inicial; avaliar inclusão no futuro)*.
 4. **Beleza e Saúde:** Produtos de cuidados pessoais, cosméticos e suplementação voltados ao bem-estar.
 
 ## Metas Financeiras (Plano Quita-Dívidas)

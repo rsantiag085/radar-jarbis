@@ -1,0 +1,17 @@
+[Unit]
+Description=RadarJarbis - Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=SEU_USUARIO_LINUX
+WorkingDirectory=/caminho/para/radar-jarbis
+ExecStart=/caminho/para/radar-jarbis/.venv/bin/python -m src.bot
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=radar-jarbis
+
+[Install]
+WantedBy=multi-user.target

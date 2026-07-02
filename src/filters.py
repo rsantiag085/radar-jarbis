@@ -32,6 +32,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "lampada inteligente", "tomada inteligente", "câmera de segurança",
         "camera de segurança", "campainha inteligente", "alexa", "echo dot",
         "google home", "google nest", "chromecast", "fire tv stick", "apple tv",
+        "ventilador de mesa",
         # EXCLUÍDO: eletrodomésticos, utensílios de cozinha (CONTEXT.md Fase 1)
     ],
     "beleza_saude": [
