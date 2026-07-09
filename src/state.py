@@ -51,9 +51,27 @@ def _get_conn() -> sqlite3.Connection:
         _conn.execute("""
             CREATE TABLE IF NOT EXISTS posted_messages (
                 msg_id    TEXT PRIMARY KEY,
-                posted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                posted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                asin      TEXT,
+                price     TEXT
             )
         """)
+        # Adicionar coluna asin caso ela não exista em um banco pré-existente
+        try:
+            _conn.execute("ALTER TABLE posted_messages ADD COLUMN asin TEXT")
+        except sqlite3.OperationalError:
+            # Coluna já existe
+            pass
+
+        # Adicionar coluna price caso ela não exista em um banco pré-existente
+        try:
+            _conn.execute("ALTER TABLE posted_messages ADD COLUMN price TEXT")
+        except sqlite3.OperationalError:
+            # Coluna já existe
+            pass
+
+        # Adicionar índice na coluna asin para buscas rápidas
+        _conn.execute("CREATE INDEX IF NOT EXISTS idx_posted_messages_asin ON posted_messages(asin)")
         _conn.commit()
     return _conn
 
@@ -80,7 +98,51 @@ def already_posted(msg_id: str) -> bool:
     return row is not None
 
 
-def mark_posted(msg_id: str) -> None:
+def asin_already_posted(asin: str, price: str | None = None, within_hours: int = 24) -> bool:
+    """Verifica se o ASIN já foi postado no canal dentro da janela de horas especificada.
+
+    Se o preço for fornecido, compara o preço atual com o preço da última postagem deste ASIN.
+    Se o preço atual for diferente do preço da última postagem, permite postar novamente (False).
+    Se o preço for igual (ou não fornecido), barra a postagem (True).
+
+    Args:
+        asin: O ASIN do produto Amazon (10 caracteres).
+        price: Preço do produto para checagem dupla.
+        within_hours: Janela de tempo em horas para considerar duplicidade.
+
+    Returns:
+        True se já foi postado com o mesmo preço recentemente, False caso contrário.
+    """
+    if not asin:
+        return False
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT price FROM posted_messages "
+        "WHERE asin = ? AND posted_at >= datetime('now', ?) "
+        "ORDER BY posted_at DESC LIMIT 1",
+        (asin, f"-{within_hours} hours")
+    ).fetchone()
+
+    if row is None:
+        return False
+
+    # Se encontramos um registro recente e temos preço, comparamos
+    if price is not None:
+        last_price = row[0]
+
+        # Compara preços normalizados (limpos de R$, ponto, espaços e quebras de linha/non-breaking spaces)
+        def clean_p(p):
+            if not p:
+                return ""
+            return p.upper().replace("R$", "").replace(".", "").replace(" ", "").replace("\xa0", "").strip()
+
+        if clean_p(last_price) != clean_p(price):
+            return False  # Preço mudou! Permite postagem
+
+    return True  # Sem preço para comparar ou preço igual -> Bloqueia (duplicata)
+
+
+def mark_posted(msg_id: str, asin: str | None = None, price: str | None = None) -> None:
     """Registra a mensagem como postada para evitar duplicidade.
 
     Usa `with conn:` para gerenciar a transação (commit/rollback).
@@ -88,11 +150,14 @@ def mark_posted(msg_id: str) -> None:
 
     Args:
         msg_id: Identificador único no formato '{chat_id}:{message_id}'.
+        asin: ASIN opcional do produto Amazon.
+        price: Preço opcional do produto.
     """
     conn = _get_conn()
     with conn:  # commit no __exit__ normal; rollback em exceção
         conn.execute(
-            "INSERT OR IGNORE INTO posted_messages (msg_id) VALUES (?)", (msg_id,)
+            "INSERT OR IGNORE INTO posted_messages (msg_id, asin, price) VALUES (?, ?, ?)",
+            (msg_id, asin, price)
         )
 
 

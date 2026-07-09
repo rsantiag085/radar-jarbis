@@ -43,8 +43,17 @@ try:
     # Delays de controle de spam
     RATE_LIMIT_DELAY: float = float(os.getenv("RATE_LIMIT_DELAY", "3.5"))
 
+    # Janela de deduplicação de anúncios idênticos (em horas)
+    DEDUPLICATION_WINDOW_HOURS: int = int(os.getenv("DEDUPLICATION_WINDOW_HOURS", "24"))
+
     # Porta de métricas do Prometheus
     METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8000"))
+
+    # Habilita ou desabilita publicação de cupons gerais da Amazon
+    ENABLE_COUPONS: bool = os.getenv("ENABLE_COUPONS", "false").lower() == "true"
+
+    # Habilita ou desabilita o modo Prime Day para formatação de posts
+    PRIME_DAY_MODE: bool = os.getenv("PRIME_DAY_MODE", "false").lower() == "true"
 
 except KeyError as e:
     raise RuntimeError(

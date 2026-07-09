@@ -177,6 +177,34 @@ class TestExtractProductName(unittest.TestCase):
         )
         self.assertEqual(self._product_name(text), "Notebook Lenovo Ideapad Slim 3")
 
+    def test_evita_link_como_nome_de_produto(self):
+        text = (
+            "SuaviPan Bolinho de Proteína Zero Açúcar Sabor Baunilha com Recheio Sabor Chocolate Caixa com 12 Unidades de 55g - R$26\n\n"
+            "https://link.amazon/B0aXFlf8l"
+        )
+        self.assertEqual(
+            self._product_name(text),
+            "SuaviPan Bolinho de Proteína Zero Açúcar Sabor Baunilha com Recheio Sabor Chocol"
+        )
+
+    def test_limpa_preco_e_hifen_do_final(self):
+        text = "Mawwal - Hiyam Eau De Parfum Masculino 100ml - R$50\n\nhttps://link.amazon/B02fADu0l"
+        self.assertEqual(self._product_name(text), "Mawwal - Hiyam Eau De Parfum Masculino 100ml")
+
+    def test_evita_linha_de_venda_como_nome_de_produto(self):
+        text = (
+            "Kit Gillette Mach3 10 cargas + Necessaire, Higiene Pessoal, Cuidado com a barba, Lâminas e Aparelhos de Barbear\n"
+            "🪒🪒🪒🪒\n\n"
+            "Vendido e Enviado pela Amazon\n\n"
+            "Por apenas: R$76,78\n\n"
+            "Frete expresso grátis (prime)\n\n"
+            "https://link.amazon/B0ciJHsm6"
+        )
+        self.assertEqual(
+            self._product_name(text),
+            "Kit Gillette Mach3 10 cargas + Necessaire, Higiene Pessoal, Cuidado com a barba"
+        )
+
 
 # ===========================================================================
 # 1F. EXTRAÇÃO DE TEASER — _extract_teaser
@@ -350,10 +378,9 @@ class TestConvertUrls(unittest.TestCase):
 class TestProcess(unittest.TestCase):
     """Valida o output HTML do process() contra estrutura esperada."""
 
-    TRIGGERS = {"🔥 OFERTA PRIME DAY 🔥"}
+    TRIGGERS = set(converters._TRIGGERS)
 
     def _assert_post_structure(self, result: str, expect_price=True, expect_url=True):
-        self.assertTrue(any(t in result for t in self.TRIGGERS), "Deve conter gatilho mental.")
         self.assertIn("🛒", result)
         self.assertIn("<b>", result)
         if expect_price:
@@ -394,6 +421,29 @@ class TestProcess(unittest.TestCase):
         result = converters.process(text)
         self.assertIn("879", result)
 
+    def test_copywriting_user_example(self):
+        """Testa o copywriting do exemplo do usuário: título/produto, breve descrição, valor e link."""
+        text = (
+            "😉 VAI DEIXAR SEU CABELO PERFEITO!\n\n"
+            "👱🏻‍♀️ Eudora Siàge Cica Therapy Leave-in 100ml\n\n"
+            "🔥 por R$ 30 na Amazon\n\n"
+            "🛒 https://amzn.to/4f1NziF\n\n"
+            "🚛 Frete grátis | Amazon Prime"
+        )
+        result = converters.process(text)
+        self.assertIsNotNone(result)
+        # Deve ter o nome do produto no título (negrito)
+        self.assertIn("<b>Eudora Siàge Cica Therapy Leave-in 100ml</b>", result)
+        # Deve ter a breve descrição (gatilho original) como itálico
+        self.assertIn("<i>VAI DEIXAR SEU CABELO PERFEITO!</i>", result)
+        # Deve ter o preço
+        self.assertIn("<b>R$ 30</b>", result)
+        # Deve ter a URL convertida
+        self.assertIn("https://amzn.to/4f1NziF", result)
+        # Não deve conter gatilhos mentais redundantes no início
+        for trigger in converters._TRIGGERS:
+            self.assertNotIn(trigger, result)
+
 
 # ===========================================================================
 # 5. FILTROS — is_relevant() e get_category()
@@ -414,11 +464,18 @@ class TestIsRelevant(unittest.TestCase):
         self.assertTrue(filters.is_relevant("Ventilador de Mesa Arno 40cm por R$ 189"))
         self.assertTrue(filters.is_relevant("Ventilador de mesa Mondial 30cm por R$ 120"))
 
+    def test_mop_limpeza_aprovado(self):
+        self.assertTrue(filters.is_relevant("Mop com Balde e Esfregão Simplo por R$ 49"))
+
     def test_beleza_saude_aprovada(self):
         self.assertTrue(filters.is_relevant("Whey Protein Growth 1kg chocolate R$ 89,90"))
 
     def test_pessoal_aprovada(self):
         self.assertTrue(filters.is_relevant("Tênis Nike Air Max 36 por R$ 399"))
+
+    def test_supermercado_aprovado(self):
+        self.assertTrue(filters.is_relevant("Batata Frita Pringles Tripack por R$ 25"))
+        self.assertTrue(filters.is_relevant("Chocolate Lacta 80g por R$ 5"))
 
     def test_sem_desconto_mencionado_aprovada(self):
         """Sem % de desconto no texto, o filtro de desconto não é ativado."""
@@ -443,11 +500,11 @@ class TestIsRelevant(unittest.TestCase):
 
     # --- Bloqueios por categoria excluída ---
 
-    def test_vestuario_camiseta_bloqueado(self):
-        self.assertFalse(filters.is_relevant("Camiseta Nike Dri-Fit por R$ 89 — 30% off"))
+    def test_vestuario_camiseta_aprovada(self):
+        self.assertTrue(filters.is_relevant("Camiseta Nike Dri-Fit por R$ 89 — 30% off"))
 
-    def test_vestuario_calcas_bloqueado(self):
-        self.assertFalse(filters.is_relevant("Calça Jeans Slim por R$ 120 — 20% off"))
+    def test_vestuario_calcas_aprovada(self):
+        self.assertTrue(filters.is_relevant("Calça Jeans Slim por R$ 120 — 20% off"))
 
     def test_eletrodomestico_geladeira_bloqueado(self):
         self.assertFalse(filters.is_relevant("Geladeira Brastemp 400L frost free R$ 2.800"))
@@ -461,8 +518,8 @@ class TestIsRelevant(unittest.TestCase):
     # --- Edge case: categoria válida + keyword excluída no mesmo texto ---
 
     def test_categoria_valida_com_excluida_bloqueado(self):
-        """Texto com notebook (válido) E camiseta (excluído) deve ser BLOQUEADO."""
-        text = "Kit: Notebook Dell + Camiseta Nike por R$ 3.000 — 25% off"
+        """Texto com notebook (válido) E geladeira (excluído) deve ser BLOQUEADO."""
+        text = "Kit: Notebook Dell + Geladeira Consul por R$ 3.000 — 25% off"
         self.assertFalse(filters.is_relevant(text))
 
     # --- Textos sem categoria conhecida ---
@@ -500,6 +557,21 @@ class TestIsRelevant(unittest.TestCase):
         """Padrão '25% de desconto' deve ser reconhecido."""
         self.assertTrue(filters.is_relevant("Teclado mecânico com 25% de desconto"))
 
+    def test_coupon_announcement_is_relevant_only_if_enabled(self):
+        coupon_text = (
+            "💥 CHEGOU MAIS UM CUPOM AMAZON!\n"
+            "🤑 Ganhe R$ 100 OFF nas compras acima de R$ 699.\n"
+            "🏷️ Cupom: CHEGOU"
+        )
+        
+        # Por padrão, ENABLE_COUPONS deve ser False
+        with patch("src.filters.settings.ENABLE_COUPONS", False):
+            self.assertFalse(filters.is_relevant(coupon_text))
+            
+        with patch("src.filters.settings.ENABLE_COUPONS", True):
+            self.assertTrue(filters.is_relevant(coupon_text))
+
+
 
 class TestGetCategory(unittest.TestCase):
     """Valida a detecção de categoria pelo get_category()."""
@@ -513,14 +585,39 @@ class TestGetCategory(unittest.TestCase):
     def test_ventilador_de_mesa_smart_home(self):
         self.assertEqual(filters.get_category("Ventilador de Mesa Arno"), "smart_home")
 
+    def test_mop_smart_home(self):
+        self.assertEqual(filters.get_category("Mop com Balde e Esfregão"), "smart_home")
+
     def test_beleza_saude(self):
         self.assertEqual(filters.get_category("Whey Protein 1kg"), "beleza_saude")
 
     def test_pessoal(self):
         self.assertEqual(filters.get_category("Tênis Adidas Ultra Boost"), "pessoal")
 
+    def test_supermercado(self):
+        self.assertEqual(filters.get_category("Batata Frita Pringles"), "supermercado")
+        self.assertEqual(filters.get_category("Chocolate Lacta"), "supermercado")
+
+    def test_vestuario(self):
+        self.assertEqual(filters.get_category("Kit 12 Cuecas Boxer Reebok"), "vestuario")
+        self.assertEqual(filters.get_category("Camiseta Nike Dri-Fit"), "vestuario")
+
     def test_sem_categoria_retorna_none(self):
         self.assertIsNone(filters.get_category("Produto genérico sem categoria"))
+
+    def test_coupon_category_only_if_enabled(self):
+        coupon_text = (
+            "💥 CHEGOU MAIS UM CUPOM AMAZON!\n"
+            "🤑 Ganhe R$ 100 OFF nas compras acima de R$ 699.\n"
+            "🏷️ Cupom: CHEGOU"
+        )
+        
+        with patch("src.filters.settings.ENABLE_COUPONS", False):
+            self.assertIsNone(filters.get_category(coupon_text))
+            
+        with patch("src.filters.settings.ENABLE_COUPONS", True):
+            self.assertEqual(filters.get_category(coupon_text), "cupons")
+
 
 
 
@@ -559,10 +656,9 @@ class TestExpandirEConverterLink(unittest.IsolatedAsyncioTestCase):
 class TestProcessAsync(unittest.IsolatedAsyncioTestCase):
     """Valida o output HTML do process_async() de forma assíncrona."""
 
-    TRIGGERS = {"🔥 OFERTA PRIME DAY 🔥"}
+    TRIGGERS = set(converters._TRIGGERS)
 
     def _assert_post_structure(self, result: str, expect_price=True, expect_url=True):
-        self.assertTrue(any(t in result for t in self.TRIGGERS), "Deve conter gatilho mental.")
         self.assertIn("🛒", result)
         self.assertIn("<b>", result)
         if expect_price:
@@ -608,6 +704,142 @@ class TestProcessAsync(unittest.IsolatedAsyncioTestCase):
             result = await converters.process_async(text)
             self._assert_post_structure(result)
             self.assertIn("https://www.amazon.com.br/dp/B09G3HRMVB?tag=noradardojarb-20", result)
+
+
+class TestExtractAsin(unittest.TestCase):
+    """Valida a extração de ASIN de URLs da Amazon e blocos de texto."""
+
+    def test_extract_asin_from_various_url_formats(self):
+        # 1. Formato padrão dp
+        url1 = "https://www.amazon.com.br/dp/B0C3MB3B52"
+        self.assertEqual(converters.extract_asin(url1), "B0C3MB3B52")
+
+        # 2. Formato gp/product
+        url2 = "https://www.amazon.com.br/gp/product/B0C3MB3B52"
+        self.assertEqual(converters.extract_asin(url2), "B0C3MB3B52")
+
+        # 3. Formato com nome do produto antes do dp
+        url3 = "https://www.amazon.com.br/Echo-Dot-5%C2%AA-gera%C3%A7%C3%A3o-Preta/dp/B09B8V1C6N"
+        self.assertEqual(converters.extract_asin(url3), "B09B8V1C6N")
+
+        # 4. Formato gp/aw/d
+        url4 = "https://www.amazon.com.br/gp/aw/d/B09B8V1C6N"
+        self.assertEqual(converters.extract_asin(url4), "B09B8V1C6N")
+
+        # 5. Formato com parâmetros na URL
+        url5 = "https://amazon.com.br/dp/B09B8V1C6N/ref=nosim?tag=noradardojarb-20"
+        self.assertEqual(converters.extract_asin(url5), "B09B8V1C6N")
+
+        # 6. Formato com query parameter asin=...
+        url6 = "https://www.amazon.com.br/search?query=notebook&asin=B0C3MB3B52"
+        self.assertEqual(converters.extract_asin(url6), "B0C3MB3B52")
+
+        # 7. Formato com lowercase no ASIN deve retornar em UPPERCASE
+        url7 = "https://www.amazon.com.br/dp/b0c3mb3b52"
+        self.assertEqual(converters.extract_asin(url7), "B0C3MB3B52")
+
+    def test_extract_asin_from_text_block(self):
+        # Texto contendo um link Amazon
+        text = (
+            "🔥 OFERTA PRIME DAY 🔥\n\n"
+            "🛒 Notebook Dell Inspiron 15\n"
+            "De R$ 4.999 por R$ 2.799,90\n\n"
+            "🔗 Link: https://www.amazon.com.br/dp/B09G3HRMVB?tag=noradardojarb-20\n"
+        )
+        self.assertEqual(converters.extract_asin(text), "B09G3HRMVB")
+
+    def test_extract_asin_invalid_or_missing(self):
+        # Link que não é Amazon
+        url_non_amazon = "https://www.magazineluiza.com.br/produto/12345"
+        self.assertIsNone(converters.extract_asin(url_non_amazon))
+
+        # Texto vazio/None
+        self.assertIsNone(converters.extract_asin(""))
+        self.assertIsNone(converters.extract_asin(None))
+
+
+
+
+# ===========================================================================
+# 4. ANÚNCIOS DE CUPONS GERAIS
+# ===========================================================================
+
+class TestCouponAnnouncements(unittest.TestCase):
+    """Valida a detecção e formatação de anúncios de cupons gerais."""
+
+    def setUp(self):
+        self.original_enable_coupons = converters.settings.ENABLE_COUPONS
+        converters.settings.ENABLE_COUPONS = True
+
+    def tearDown(self):
+        converters.settings.ENABLE_COUPONS = self.original_enable_coupons
+
+
+    def test_detection_coupon_announcement(self):
+        # 1. Anúncio geral de cupom
+        text1 = (
+            "💥 CHEGOU MAIS UM CUPOM AMAZON!\n"
+            "🤑 Ganhe R$ 100 OFF nas compras acima de R$ 699.\n"
+            "🛒 https://amzn.to/4rg5Zl0\n"
+            "🏷️ Cupom: CHEGOU\n"
+            "⚠️ Válido para alguns produtos. Faça o teste.\n"
+            "💙 Exclusivo membros prime"
+        )
+        self.assertTrue(converters._is_coupon_announcement(text1))
+
+        # 2. Oferta de produto com cupom (deve ser falsa para anúncio geral)
+        text2 = (
+            "💻 Notebook Lenovo IdeaPad Ryzen 5\n"
+            "🔥 Menor preço do ano!\n"
+            "💰 De R$ 3.000 por R$ 2.499\n"
+            "🎟️ Use o cupom: LENOVO50\n"
+            "🛒 https://amzn.to/3ryG4r\n"
+        )
+        self.assertFalse(converters._is_coupon_announcement(text2))
+
+        # 3. Oferta de fone de ouvido com cupom (contém a preposição 'de' que causava falso positivo)
+        text3 = (
+            "ESSE OUVIDO MERECE JBL\n\n"
+            "🎧 Fone de Ouvido Over-Ear JBL Tune 530BT\n\n"
+            "🔥 DE 299 | POR 155,22 no Pix\n"
+            "🎟️ Resgate o cupom: VAMOPRIMEDAY\n\n"
+            "🔗 https://amzn.divulgador.link/a0sya1YR\n"
+            "🔹 Oferta exclusiva membros Amazon Prime"
+        )
+        self.assertFalse(converters._is_coupon_announcement(text3))
+
+    def test_coupon_benefit_extraction(self):
+        text = (
+            "💥 CHEGOU MAIS UM CUPOM AMAZON!\n"
+            "🤑 Ganhe R$ 100 OFF nas compras acima de R$ 699.\n"
+            "🏷️ Cupom: CHEGOU"
+        )
+        self.assertEqual(
+            converters._extract_coupon_benefit(text),
+            "Ganhe R$ 100 OFF nas compras acima de R$ 699."
+        )
+
+    def test_coupon_formatting(self):
+        text = (
+            "💥 CHEGOU MAIS UM CUPOM AMAZON!\n"
+            "🤑 Ganhe R$ 100 OFF nas compras acima de R$ 699.\n"
+            "🛒 https://amzn.to/4rg5Zl0\n"
+            "🏷️ Cupom: CHEGOU\n"
+            "⚠️ Válido para alguns produtos. Faça o teste.\n"
+            "💙 Exclusivo membros prime"
+        )
+        
+        # Como o process normal necessita de requests mockados, testamos o fluxo de formatação interna
+        coupon = converters._extract_coupon(text)
+        benefit = converters._extract_coupon_benefit(text)
+        has_prime = converters._check_prime(text)
+        teaser = converters._extract_teaser(text, benefit)
+        formatted = converters._format_coupon_post(benefit, "https://amazon.com.br/dp/B0XXXX", coupon, has_prime, teaser)
+        
+        self.assertIn("🔥 CUPOM AMAZON 🔥", formatted)
+        self.assertIn("Ganhe R$ 100 OFF nas compras acima de R$ 699.", formatted)
+        self.assertIn("Cupom: <b>CHEGOU</b>", formatted)
+        self.assertIn("Exclusivo Membros Prime", formatted)
 
 
 # ===========================================================================

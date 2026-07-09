@@ -22,6 +22,7 @@ Campos obrigatórios no `.env`:
 * `OUTPUT_CHANNEL_ID`: Canal do Telegram de destino para publicação das ofertas (ex: `@noradardojarbis`).
 * `AMAZON_AFFILIATE_TAG`: Sua tag de associado Amazon (ex: `noradardojarb-20`).
 * `RATE_LIMIT_DELAY`: Cooldown entre postagens em segundos (padrão `3.5`).
+* `DEDUPLICATION_WINDOW_HOURS`: Janela em horas para deduplicação de anúncios repetidos do mesmo produto (padrão `24`).
 
 ---
 
@@ -88,11 +89,13 @@ graph TD
     J -- Não --> K[Descarta & Marca como Processado no DB]
     J -- Sim --> L[Expande Link & Injeta Tag de Afiliado]
     L --> M[Extrai preço, parcelamento, cupom, Prime, teaser e imagem]
-    M --> N{Possui imagem original?}
+    M --> M2{ASIN + Preço já postados na janela?}
+    M2 -- Sim --> H
+    M2 -- Não --> N{Possui imagem original?}
     N -- Sim --> O[Baixa imagem para RAM & envia como Foto + Legenda]
     N -- Não --> P[Envia apenas como Mensagem de Texto]
     O --> Q[Aplica Rate Limit Cooldown]
     P --> Q
     Q --> R[Envia para o Canal de Destino]
-    R --> S[Grava ID no Banco SQLite de Deduplicação]
+    R --> S[Grava ID, ASIN e Preço no Banco SQLite de Deduplicação]
 ```

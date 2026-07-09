@@ -32,3 +32,7 @@ env/
 
 # Systemd local config
 radar-jarbis.service
+
+# Changelog
+CHANGELOG.md
+

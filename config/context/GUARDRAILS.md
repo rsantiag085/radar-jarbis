@@ -10,3 +10,5 @@
 
 ## 3. Estabilidade do Sistema
 - **Limitação de Rate Limit:** Implementar um espaçamento (sleep/delay) de segurança entre as requisições de leitura e os disparos no canal de saída para evitar banimentos por SPAM na API do Telegram.
+- **Barreira Antiduplicação (ASIN + Preço):** O robô não deve publicar anúncios idênticos do mesmo produto. A repetição do mesmo produto (ASIN) na janela ativa de deduplicação (padrão 24 horas) é bloqueada, exceto se houver alteração de preço (quedas ou reajustes).
+- **Controle de Nichos e Cupons:** Cupons gerais que mencionem produtos de categorias excluídas (ex: vestuário, eletrodomésticos grandes) ou fora de nicho (ex: livros, pet shop, automotivo, brinquedos, fraldas) devem ser ativamente bloqueados no filtro de relevância para manter a integridade comercial do canal.

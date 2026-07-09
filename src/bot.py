@@ -243,7 +243,7 @@ async def process_message_object(chat_id: int, message) -> None:
 
         # Deduplicação no banco de dados
         if state.already_posted(msg_id):
-            logger.debug(f"[{msg_id}] Já postado anteriormente. Ignorando.")
+            logger.debug(f"[{msg_id}] Já postado anteriormente (por msg_id). Ignorando.")
             OFFERS_FILTERED.labels(reason="duplicate").inc()
             return
 
@@ -259,6 +259,19 @@ async def process_message_object(chat_id: int, message) -> None:
             state.mark_posted(msg_id)
             return
 
+        # Deduplicação por ASIN (mesmo produto de afiliado diferente)
+        asin = converters.extract_asin(formatted)
+        price = converters.extract_price(text)
+        if asin and state.asin_already_posted(asin, price=price, within_hours=settings.DEDUPLICATION_WINDOW_HOURS):
+            logger.info(
+                f"[{msg_id}] Descartado: Produto (ASIN: {asin}) já postado "
+                f"nas últimas {settings.DEDUPLICATION_WINDOW_HOURS} horas com o mesmo preço ({price})."
+            )
+            OFFERS_FILTERED.labels(reason="duplicate_asin").inc()
+            # Marca o ID da mensagem para evitar reprocessá-la
+            state.mark_posted(msg_id, asin=asin, price=price)
+            return
+
         # Tenta baixar a foto original do anúncio (se houver)
         photo_bytes = None
         if message.photo:
@@ -266,7 +279,8 @@ async def process_message_object(chat_id: int, message) -> None:
                 photo_bytes = await user_client.download_media(message, file=bytes)
                 logger.info(f"[{msg_id}] Imagem da oferta baixada com sucesso (~{len(photo_bytes)} bytes).")
             except Exception as e:
-                logger.warning(f"[{msg_id}] Não foi possível baixar a imagem: {e}. Enviando apenas texto.")
+                warning_msg = f"[{msg_id}] Não foi possível baixar a imagem: {e}. Enviando apenas texto."
+                logger.warning(warning_msg)
                 ERRORS_TOTAL.labels(type="media_download").inc()
 
         # Rate limit antes da postagem (GUARDRAILS.md §3)
@@ -276,7 +290,7 @@ async def process_message_object(chat_id: int, message) -> None:
         await _safe_send(formatted, photo_bytes=photo_bytes)
 
         # Marca como postada
-        state.mark_posted(msg_id)
+        state.mark_posted(msg_id, asin=asin, price=price)
     finally:
         _processing_msg_ids.discard(msg_id)
         PROCESSING_CONCURRENCY.set(len(_processing_msg_ids))

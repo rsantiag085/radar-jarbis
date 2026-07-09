@@ -119,6 +119,44 @@ class TestStateDeduplication(unittest.TestCase):
         self.assertEqual(removidos, 1, "Deve ter removido 1 registro antigo.")
         self.assertFalse(state_module.already_posted(self.MSG_ID))
 
+    def test_asin_deduplication(self):
+        """Valida se o ASIN é corretamente salvo e dedupado em diferentes janelas com checagem de preço."""
+        asin = "B0C3MB3B52"
+        price_1 = "R$ 2.499,90"
+        price_2 = "R$ 2.399,90"
+
+        self.assertFalse(state_module.asin_already_posted(asin, price=price_1))
+
+        # Salva postagem com ASIN e preço
+        state_module.mark_posted(self.MSG_ID, asin=asin, price=price_1)
+
+        # Mesmo ASIN e mesmo preço deve barrar (True)
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_1))
+        # Mesmo ASIN mas com preço diferente deve permitir (False)
+        self.assertFalse(state_module.asin_already_posted(asin, price=price_2))
+
+        # Teste de robustez de formatação do preço (espaços extras e símbolos)
+        self.assertTrue(state_module.asin_already_posted(asin, price=" 2499,90 "))
+        self.assertTrue(state_module.asin_already_posted(asin, price="r$2499,90"))
+
+        # Se for verificado além de uma janela maior (ex: 48h), deve retornar True se a postagem foi recente (agora)
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_1, within_hours=48))
+
+        # Altera a data de postagem para 25 horas atrás
+        conn = sqlite3.connect(state_module.DB_PATH)
+        conn.execute(
+            "UPDATE posted_messages SET posted_at = datetime('now', '-25 hours') WHERE msg_id = ?",
+            (self.MSG_ID,),
+        )
+        conn.commit()
+        conn.close()
+
+        # Deve retornar False para janela de 24h, mas True para janela de 48h se o preço for igual
+        self.assertFalse(state_module.asin_already_posted(asin, price=price_1, within_hours=24))
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_1, within_hours=48))
+
+
+
 
 # ===========================================================================
 # 2. TESTES DE INTEGRAÇÃO — pipeline bot.py → state.py (com mocks)
@@ -158,16 +196,17 @@ class TestBotPipelineDeduplication(unittest.IsolatedAsyncioTestCase):
         event.message.id = int(self.MSG_ID.split(":")[1])
         return event
 
-    async def _run_pipeline(self, mock_send: AsyncMock) -> bool:
+    async def _run_pipeline(self, mock_send: AsyncMock, text_override: str = None) -> bool:
         """
         Executa o pipeline equivalente ao handle_new_offer do bot.py.
         Retorna True se o post foi despachado, False se bloqueado.
         """
         import src.filters as filters
         import src.converters as converters
+        import src.settings as settings
 
         event = self._build_mock_event()
-        text = event.message.text or ""
+        text = text_override if text_override is not None else (event.message.text or "")
         if not text:
             return False
 
@@ -182,9 +221,96 @@ class TestBotPipelineDeduplication(unittest.IsolatedAsyncioTestCase):
             return False  # ← BLOQUEIO DE DUPLICATA
 
         formatted = converters.process(text)
+        if not formatted:
+            return False
+
+        # Deduplicação por ASIN (mesmo produto de afiliado diferente)
+        asin = converters.extract_asin(formatted)
+        price = converters.extract_price(text)
+        if asin and state_module.asin_already_posted(asin, price=price, within_hours=settings.DEDUPLICATION_WINDOW_HOURS):
+            state_module.mark_posted(msg_id, asin=asin, price=price)
+            return False
+
         await mock_send(formatted)
-        state_module.mark_posted(msg_id)
+        state_module.mark_posted(msg_id, asin=asin, price=price)
         return True
+
+    async def test_asin_duplicate_blocked_different_msg_id(self):
+        """
+        Dois posts com msg_id diferentes e links de afiliados diferentes,
+        mas que apontam para o mesmo produto (mesmo ASIN) e mesmo preço devem ser dedupados.
+        """
+        mock_send = AsyncMock()
+
+        # Primeiro post
+        text_1 = (
+            "🛒 Notebook Samsung 15' Intel Core i5\n"
+            "De R$ 3.999 por R$ 2.499,90 — 37% off\n"
+            "https://www.amazon.com.br/dp/B0C3MB3B52?tag=afiliado1-20"
+        )
+
+        # Simula a primeira postagem do produto
+        resultado_1 = await self._run_pipeline(mock_send, text_override=text_1)
+        self.assertTrue(resultado_1, "O primeiro post deve ser enviado com sucesso.")
+
+        # Segundo post: id diferente, afiliado diferente, mas mesmo produto (mesmo ASIN) e mesmo preço
+        text_2 = (
+            "🛒 Notebook Samsung 15' Intel Core i5\n"
+            "De R$ 3.999 por R$ 2.499,90 — 37% off\n"
+            "https://www.amazon.com.br/dp/B0C3MB3B52?tag=afiliado2-20"
+        )
+
+        # Moca o evento para simular um novo message_id
+        with patch.object(self, '_build_mock_event') as mock_event_builder:
+            event = MagicMock()
+            event.message.text = text_2
+            event.chat_id = 999999999
+            event.message.id = 12345
+            mock_event_builder.return_value = event
+
+            # Tenta enviar o segundo post
+            resultado_2 = await self._run_pipeline(mock_send, text_override=text_2)
+
+        self.assertFalse(resultado_2, "O segundo post deve ser bloqueado por ASIN duplicado e mesmo preço.")
+        # O mock_send deve ter sido chamado exatamente uma vez (só para o primeiro post)
+        mock_send.assert_awaited_once()
+
+    async def test_asin_duplicate_allowed_if_price_changes(self):
+        """
+        Se o produto já foi postado, mas o preço mudou, deve permitir a postagem.
+        """
+        mock_send = AsyncMock()
+
+        # Primeiro post
+        text_1 = (
+            "🛒 Notebook Samsung 15' Intel Core i5\n"
+            "De R$ 3.999 por R$ 2.499,90 — 37% off\n"
+            "https://www.amazon.com.br/dp/B0C3MB3B52?tag=afiliado1-20"
+        )
+
+        resultado_1 = await self._run_pipeline(mock_send, text_override=text_1)
+        self.assertTrue(resultado_1)
+
+        # Segundo post com preço diferente
+        text_2 = (
+            "🛒 Notebook Samsung 15' Intel Core i5\n"
+            "De R$ 3.999 por R$ 2.299,90 — 42% off\n"
+            "https://www.amazon.com.br/dp/B0C3MB3B52?tag=afiliado2-20"
+        )
+
+        with patch.object(self, '_build_mock_event') as mock_event_builder:
+            event = MagicMock()
+            event.message.text = text_2
+            event.chat_id = 999999999
+            event.message.id = 12345
+            mock_event_builder.return_value = event
+
+            resultado_2 = await self._run_pipeline(mock_send, text_override=text_2)
+
+        self.assertTrue(resultado_2, "O segundo post deve ser enviado porque o preço mudou.")
+        self.assertEqual(mock_send.await_count, 2, "Devem ocorrer duas postagens.")
+
+
 
     async def test_primeira_e_segunda_tentativa(self):
         """
