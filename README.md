@@ -22,7 +22,7 @@ Campos obrigatórios no `.env`:
 * `OUTPUT_CHANNEL_ID`: Canal do Telegram de destino para publicação das ofertas (ex: `@noradardojarbis`).
 * `AMAZON_AFFILIATE_TAG`: Sua tag de associado Amazon (ex: `noradardojarb-20`).
 * `RATE_LIMIT_DELAY`: Cooldown entre postagens em segundos (padrão `3.5`).
-* `DEDUPLICATION_WINDOW_HOURS`: Janela em horas para deduplicação de anúncios repetidos do mesmo produto (padrão `24`).
+* `DEDUPLICATION_WINDOW_HOURS`: Janela em horas para deduplicação. (Nota: Para deduplicação de ASIN, aplica-se a janela dinâmica de 48h para queda de preço >= 10% ou 8 dias caso contrário).
 
 ---
 

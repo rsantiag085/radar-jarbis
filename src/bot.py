@@ -265,7 +265,7 @@ async def process_message_object(chat_id: int, message) -> None:
         if asin and state.asin_already_posted(asin, price=price, within_hours=settings.DEDUPLICATION_WINDOW_HOURS):
             logger.info(
                 f"[{msg_id}] Descartado: Produto (ASIN: {asin}) já postado "
-                f"nas últimas {settings.DEDUPLICATION_WINDOW_HOURS} horas com o mesmo preço ({price})."
+                f"recentemente (limite de 48h para queda de preço >=10% ou 8 dias caso contrário) com o preço ({price})."
             )
             OFFERS_FILTERED.labels(reason="duplicate_asin").inc()
             # Marca o ID da mensagem para evitar reprocessá-la

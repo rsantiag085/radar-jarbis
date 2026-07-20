@@ -122,25 +122,23 @@ class TestStateDeduplication(unittest.TestCase):
     def test_asin_deduplication(self):
         """Valida se o ASIN é corretamente salvo e dedupado em diferentes janelas com checagem de preço."""
         asin = "B0C3MB3B52"
-        price_1 = "R$ 2.499,90"
-        price_2 = "R$ 2.399,90"
+        price_1 = "R$ 100,00"
+        price_drop_9 = "R$ 91,00"   # Queda de 9% (< 10%)
+        price_drop_10 = "R$ 90,00"  # Queda de 10% (>= 10%)
+        price_drop_15 = "R$ 85,00"  # Queda de 15% (>= 10%)
+        price_higher = "R$ 110,00"  # Aumento de preço
 
         self.assertFalse(state_module.asin_already_posted(asin, price=price_1))
 
         # Salva postagem com ASIN e preço
         state_module.mark_posted(self.MSG_ID, asin=asin, price=price_1)
 
-        # Mesmo ASIN e mesmo preço deve barrar (True)
+        # Mesmo ASIN e mesmo preço deve barrar (True) — pois 0h < 8 dias
         self.assertTrue(state_module.asin_already_posted(asin, price=price_1))
-        # Mesmo ASIN mas com preço diferente deve permitir (False)
-        self.assertFalse(state_module.asin_already_posted(asin, price=price_2))
-
-        # Teste de robustez de formatação do preço (espaços extras e símbolos)
-        self.assertTrue(state_module.asin_already_posted(asin, price=" 2499,90 "))
-        self.assertTrue(state_module.asin_already_posted(asin, price="r$2499,90"))
-
-        # Se for verificado além de uma janela maior (ex: 48h), deve retornar True se a postagem foi recente (agora)
-        self.assertTrue(state_module.asin_already_posted(asin, price=price_1, within_hours=48))
+        # Queda de 9% (menos de 10%) deve barrar (True) — pois 0h < 8 dias
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_drop_9))
+        # Queda de 10% deve barrar (True) — pois 0h < 48h
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_drop_10))
 
         # Altera a data de postagem para 25 horas atrás
         conn = sqlite3.connect(state_module.DB_PATH)
@@ -151,9 +149,44 @@ class TestStateDeduplication(unittest.TestCase):
         conn.commit()
         conn.close()
 
-        # Deve retornar False para janela de 24h, mas True para janela de 48h se o preço for igual
-        self.assertFalse(state_module.asin_already_posted(asin, price=price_1, within_hours=24))
-        self.assertTrue(state_module.asin_already_posted(asin, price=price_1, within_hours=48))
+        # Mesmo preço deve barrar (True) — 25h < 8 dias
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_1))
+        # Queda de 9% deve barrar (True) — 25h < 8 dias
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_drop_9))
+        # Queda de 10% deve barrar (True) — 25h < 48h
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_drop_10))
+
+        # Altera a data de postagem para 50 horas atrás
+        conn = sqlite3.connect(state_module.DB_PATH)
+        conn.execute(
+            "UPDATE posted_messages SET posted_at = datetime('now', '-50 hours') WHERE msg_id = ?",
+            (self.MSG_ID,),
+        )
+        conn.commit()
+        conn.close()
+
+        # Mesmo preço deve barrar (True) — 50h < 8 dias
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_1))
+        # Aumento de preço deve barrar (True) — 50h < 8 dias
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_higher))
+        # Queda de 9% deve barrar (True) — 50h < 8 dias
+        self.assertTrue(state_module.asin_already_posted(asin, price=price_drop_9))
+        # Queda de 10% deve PERMITIR (False) — 50h > 48h
+        self.assertFalse(state_module.asin_already_posted(asin, price=price_drop_10))
+        # Queda de 15% deve PERMITIR (False) — 50h > 48h
+        self.assertFalse(state_module.asin_already_posted(asin, price=price_drop_15))
+
+        # Altera a data de postagem para 9 dias atrás (216 horas)
+        conn = sqlite3.connect(state_module.DB_PATH)
+        conn.execute(
+            "UPDATE posted_messages SET posted_at = datetime('now', '-9 days') WHERE msg_id = ?",
+            (self.MSG_ID,),
+        )
+        conn.commit()
+        conn.close()
+
+        # Mesmo preço deve PERMITIR (False) — 216h > 8 dias (192h)
+        self.assertFalse(state_module.asin_already_posted(asin, price=price_1))
 
 
 
@@ -277,7 +310,8 @@ class TestBotPipelineDeduplication(unittest.IsolatedAsyncioTestCase):
 
     async def test_asin_duplicate_allowed_if_price_changes(self):
         """
-        Se o produto já foi postado, mas o preço mudou, deve permitir a postagem.
+        Se o produto já foi postado, mas o preço mudou significativamente (queda >= 10%),
+        deve permitir a postagem após a janela de 48h. Se a queda for menor, bloqueia.
         """
         mock_send = AsyncMock()
 
@@ -291,10 +325,19 @@ class TestBotPipelineDeduplication(unittest.IsolatedAsyncioTestCase):
         resultado_1 = await self._run_pipeline(mock_send, text_override=text_1)
         self.assertTrue(resultado_1)
 
-        # Segundo post com preço diferente
+        # Atualiza o timestamp da última postagem para 50 horas atrás no banco temporário
+        conn = sqlite3.connect(state_module.DB_PATH)
+        conn.execute(
+            "UPDATE posted_messages SET posted_at = datetime('now', '-50 hours') WHERE asin = ?",
+            ("B0C3MB3B52",),
+        )
+        conn.commit()
+        conn.close()
+
+        # Segundo post com queda de 10% (de R$ 2.499,90 para R$ 2.249,90)
         text_2 = (
             "🛒 Notebook Samsung 15' Intel Core i5\n"
-            "De R$ 3.999 por R$ 2.299,90 — 42% off\n"
+            "De R$ 3.999 por R$ 2.249,90 — 42% off\n"
             "https://www.amazon.com.br/dp/B0C3MB3B52?tag=afiliado2-20"
         )
 
@@ -307,8 +350,35 @@ class TestBotPipelineDeduplication(unittest.IsolatedAsyncioTestCase):
 
             resultado_2 = await self._run_pipeline(mock_send, text_override=text_2)
 
-        self.assertTrue(resultado_2, "O segundo post deve ser enviado porque o preço mudou.")
-        self.assertEqual(mock_send.await_count, 2, "Devem ocorrer duas postagens.")
+        self.assertTrue(resultado_2, "O segundo post deve ser enviado porque houve queda de 10% e já passou da janela de 48h.")
+
+        # Terceiro post com queda de menos de 10% (de R$ 2.249,90 para R$ 2.199,90 -> queda de ~2.2%)
+        # Atualiza a postagem anterior (que agora é a de R$ 2.249,90) para 49 horas atrás para que ela seja a mais recente.
+        conn = sqlite3.connect(state_module.DB_PATH)
+        conn.execute(
+            "UPDATE posted_messages SET posted_at = datetime('now', '-49 hours') WHERE price = ?",
+            ("R$ 2.249,90",),
+        )
+        conn.commit()
+        conn.close()
+
+        text_3 = (
+            "🛒 Notebook Samsung 15' Intel Core i5\n"
+            "De R$ 3.999 por R$ 2.199,90 — 44% off\n"
+            "https://www.amazon.com.br/dp/B0C3MB3B52?tag=afiliado3-20"
+        )
+
+        with patch.object(self, '_build_mock_event') as mock_event_builder:
+            event = MagicMock()
+            event.message.text = text_3
+            event.chat_id = 999999999
+            event.message.id = 12346
+            mock_event_builder.return_value = event
+
+            resultado_3 = await self._run_pipeline(mock_send, text_override=text_3)
+
+        self.assertFalse(resultado_3, "O terceiro post deve ser bloqueado porque a queda foi < 10% (janela de 8 dias ativa).")
+        self.assertEqual(mock_send.await_count, 2, "Devem ocorrer apenas duas postagens enviadas (a primeira e a segunda).")
 
 
 

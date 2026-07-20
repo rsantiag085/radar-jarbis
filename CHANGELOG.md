@@ -2,20 +2,40 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
-## 📌 Onde Paramos? (Última atualização: 2026-07-09)
+## 📌 Onde Paramos? (Última atualização: 2026-07-20)
 
 ### ✅ Concluído nesta sessão:
-- **Expansão de Nichos de Garimpo**:
-  - Adicionada a categoria **Supermercado (Alimentos e Bebidas)** (ex: batatas fritas Pringles, chocolates, snacks).
-  - Adicionada a categoria **Vestuário (Roupas e Acessórios)** (ex: kit de cuecas boxer Reebok), removendo as antigas exclusões de roupas.
-  - Expandida a categoria **Casa (Smart Home e Utilidades)** para incluir utilidades domésticas e ferramentas de limpeza manual (ex: mops, baldes, esfregões).
-- **Adequação de Filtros e Motor de Relevância**: Atualizado `filters.py` com novas keywords estruturadas e remoção de restrições obsoletas de vestuário na lista `_EXCLUDED_KEYWORDS`.
-- **Suíte de Testes e Validação**: Adicionados testes em `test_converters_filters.py` para as novas categorias e ajustados os casos de testes legados de bloqueio de vestuário para garantir integridade e 100% de cobertura.
-- **Deploy e Estabilidade**: Serviço systemd `radar-jarbis` reiniciado e validado.
+- **Deduplicação de ASIN Dinâmica**: Atualizada a barreira de deduplicação por ASIN no SQLite (`state.py`) para utilizar janela de 48h em caso de queda de preço $\ge 10\%$ e 8 dias (192h) para demais casos (preço igual, aumento ou queda menor que 10%).
+- **Suíte de Testes Reajustada**: Modificada a suíte de testes unitários e de integração (`test_deduplication.py`) para validar as novas regras de janela dinâmica de ASIN, totalizando 116 testes bem-sucedidos.
+- **Adequação de Logging e Docs**: Mensagem de descarte no log de `bot.py` e arquivos markdown (`README.md`, `GEMINI.md`, `GUARDRAILS.md`) devidamente atualizados para documentar e refletir o novo comportamento.
 
 ### 🚀 Próximos Passos recomendados:
-- **Acompanhar o Tráfego do Canal**: Monitorar se as novas categorias (Supermercado, Vestuário e Utilidades Domésticas) estão fluindo de forma limpa e com as formatações corretas de preços.
-- **Deduplicação de ASIN**: Validar se a regra de ASIN + preço atua corretamente nas novas categorias.
+- **Monitorar o Fluxo**: Verificar no canal de produção se a nova barreira de deduplicação dinâmica de ASIN (48h/8d) está filtrando as ofertas conforme o esperado.
+
+---
+
+## [0.3.3] - 2026-07-20
+
+### Adicionado
+- **Regras Dinâmicas de Janela de ASIN**: Implementação de tempo dinâmico de deduplicação em `state.py`: 48h se houver queda de preço $\ge 10\%$, ou 8 dias (192h) caso contrário.
+- **Testes para Janela Dinâmica**: Testes unitários e de integração atualizados para validar as novas regras de 48h e 8 dias.
+
+### Modificado
+- **Logs**: Atualizado o log em `bot.py` para informar a janela dinâmica de ASIN correta.
+- **Documentação**: Atualizados os arquivos `README.md`, `config/context/GEMINI.md` e `config/context/GUARDRAILS.md` para alinhar as regras com o comportamento real do software.
+
+---
+
+## [0.3.2] - 2026-07-10
+
+### Adicionado
+- **Bloqueio de Cerveja**: Termos como `cerveja`, `cervejas`, `chope`, `chopp`, `baden baden` e marcas comerciais como `heineken`, `stella artois`, `budweiser`, `corona`, `eisenbahn`, `amstel`, `skol`, `brahma`, `bohemia`, `itaipava`, `devassa` adicionados em `_EXCLUDED_KEYWORDS`.
+- **Condimentos no Nicho**: Inclusão de `ketchup`, `maionese`, `mostarda` e `heinz` como termos aprovados na categoria `supermercado`.
+- **Testes Unitários**: Teste de bloqueio de cervejas (`test_cerveja_bloqueada`) e validações de margem de variação de preço drop/increase de 5% (`test_asin_deduplication`).
+
+### Modificado
+- **Regra de Deduplicação**: Substituição da comparação direta de string de preço por cálculo matemático de variação percentual (limite de 5%) em `state.py` com o helper `parse_price()`.
+- **Documentação de Nível de Contexto**: Alinhados [CONTEXT.md](file:///home/robsonsanoliveira/radar-jarbis/config/context/CONTEXT.md), [GEMINI.md](file:///home/robsonsanoliveira/radar-jarbis/config/context/GEMINI.md) e [GUARDRAILS.md](file:///home/robsonsanoliveira/radar-jarbis/config/context/GUARDRAILS.md) para refletir a exclusão de álcool/cervejas e o limite de deduplicação de 5%.
 
 ---
 

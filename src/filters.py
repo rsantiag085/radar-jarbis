@@ -46,7 +46,8 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     ],
     "supermercado": [
         "pringles", "batata frita", "batata frita pringles", "salgadinho", "chocolate",
-        "biscoito", "bolacha", "snack", "petisco", "bebida", "refrigerante", "cerveja",
+        "biscoito", "bolacha", "snack", "petisco", "bebida", "refrigerante",
+        "ketchup", "maionese", "mostarda", "heinz",
     ],
     "vestuario": [
         "cueca", "cuecas", "meia", "meias", "roupa", "roupas", "vestuário", "vestuario",
@@ -60,6 +61,9 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
 _EXCLUDED_KEYWORDS: list[str] = [
     "geladeira", "fogão", "fogao", "microondas", "liquidificador", "batedeira",
     "panela", "frigideira", "chaleira", "cafeteira",  # eletrodomésticos/cozinha
+    "cerveja", "cervejas", "chope", "chopp", "baden baden", "heineken",
+    "stella artois", "budweiser", "corona", "eisenbahn", "amstel", "skol",
+    "brahma", "bohemia", "itaipava", "devassa"
 ]
 
 # Palavras que indicam categorias/produtos fora do nosso nicho (bloqueio específico para cupons gerais)

@@ -142,6 +142,29 @@ class TestCheckPrime(unittest.TestCase):
 
 
 # ===========================================================================
+# 1D-2. VERIFICAÇÃO DE PROGRAME E POUPE — _check_subscribe_and_save
+# ===========================================================================
+
+class TestCheckSubscribeAndSave(unittest.TestCase):
+    """Valida _check_subscribe_and_save contra frases que indicam Programe e Poupe."""
+
+    def _sns(self, text: str) -> bool:
+        return converters._check_subscribe_and_save(text)
+
+    def test_sns_comum(self):
+        self.assertTrue(self._sns("Compre com Programe e Poupe para desconto"))
+
+    def test_sns_com_ampersand(self):
+        self.assertTrue(self._sns("Ative o Programe & Poupe no carrinho"))
+
+    def test_sns_lowercase(self):
+        self.assertTrue(self._sns("valor no programe e poupe no site"))
+
+    def test_sns_sem_indicativo(self):
+        self.assertFalse(self._sns("Preço normal sem assinatura"))
+
+
+# ===========================================================================
 # 1E. EXTRAÇÃO DE NOME DO PRODUTO — _extract_product_name
 # ===========================================================================
 
@@ -444,6 +467,20 @@ class TestProcess(unittest.TestCase):
         for trigger in converters._TRIGGERS:
             self.assertNotIn(trigger, result)
 
+    def test_copywriting_programe_e_poupe(self):
+        """Testa o processamento de anúncio que contém 'programe e poupe'."""
+        text = (
+            "🔥 Sabão em Pó Omo Sanitizante 1,6kg\n\n"
+            "Preço: R$ 13,25 (Valor se comprado com programe e poupe, normal é R$ 14,72)\n\n"
+            "Link: https://www.amazon.com.br/dp/B07PR12345"
+        )
+        result = converters.process(text)
+        self.assertIsNotNone(result)
+        self.assertIn("<b>Sabão em Pó Omo Sanitizante 1,6kg</b>", result)
+        self.assertIn("<b>R$ 13,25</b>", result)
+        self.assertIn("Valor com Programe e Poupe", result)
+        self.assertIn("https://www.amazon.com.br/dp/B07PR12345", result)
+
 
 # ===========================================================================
 # 5. FILTROS — is_relevant() e get_category()
@@ -476,6 +513,8 @@ class TestIsRelevant(unittest.TestCase):
     def test_supermercado_aprovado(self):
         self.assertTrue(filters.is_relevant("Batata Frita Pringles Tripack por R$ 25"))
         self.assertTrue(filters.is_relevant("Chocolate Lacta 80g por R$ 5"))
+        self.assertTrue(filters.is_relevant("Heinz Pack Ketchup 397G + Maionese 390G"))
+
 
     def test_sem_desconto_mencionado_aprovada(self):
         """Sem % de desconto no texto, o filtro de desconto não é ativado."""
@@ -514,6 +553,12 @@ class TestIsRelevant(unittest.TestCase):
 
     def test_cozinha_panela_bloqueada(self):
         self.assertFalse(filters.is_relevant("Panela de pressão elétrica R$ 179"))
+
+    def test_cerveja_bloqueada(self):
+        self.assertFalse(filters.is_relevant("Baden Baden Cerveja Ale Golden, Pack 6 unids 350ml por R$ 29"))
+        self.assertFalse(filters.is_relevant("Cerveja Heineken Lata 350ml"))
+        self.assertFalse(filters.is_relevant("Chopp Stella Artois"))
+        self.assertFalse(filters.is_relevant("Cervejas variadas em promoção"))
 
     # --- Edge case: categoria válida + keyword excluída no mesmo texto ---
 
@@ -597,6 +642,8 @@ class TestGetCategory(unittest.TestCase):
     def test_supermercado(self):
         self.assertEqual(filters.get_category("Batata Frita Pringles"), "supermercado")
         self.assertEqual(filters.get_category("Chocolate Lacta"), "supermercado")
+        self.assertEqual(filters.get_category("Heinz Pack Ketchup + Maionese"), "supermercado")
+
 
     def test_vestuario(self):
         self.assertEqual(filters.get_category("Kit 12 Cuecas Boxer Reebok"), "vestuario")

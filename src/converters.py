@@ -107,6 +107,10 @@ _PRIME_PATTERN = re.compile(
     r"\b(?:exclusiv[ao]?\s+)?membros\s+(?:Amazon\s+)?prime\b|\bexclusiv[ao]?\s+prime\b",
     re.IGNORECASE
 )
+_SUBSCRIBE_AND_SAVE_PATTERN = re.compile(
+    r"\bprograme\s+(?:e|&)\s+poupe\b",
+    re.IGNORECASE
+)
 _COUPON_PATTERN = re.compile(
     r"\b(?:CUPOM|Cupom|cupom|🎟️?|use\s+o\s+cupom|cumpom)[:\s-]*\**([A-Z0-9]{3,20}(?:\s*[\++-]\s*[A-Z0-9]{3,20})*)\**"
 )
@@ -375,6 +379,11 @@ def _check_prime(text: str) -> bool:
     return bool(_PRIME_PATTERN.search(text))
 
 
+def _check_subscribe_and_save(text: str) -> bool:
+    """Verifica se a oferta menciona a modalidade 'Programe e Poupe'."""
+    return bool(_SUBSCRIBE_AND_SAVE_PATTERN.search(text))
+
+
 def _extract_teaser(text: str, product_name: str) -> str:
     """Extrai a primeira linha não vazia do texto original como teaser/chamada,
     desde que ela não seja idêntica ao nome do produto extraído.
@@ -502,7 +511,7 @@ def _extract_first_amazon_url(text: str) -> str:
 # Formatação do post final
 # ------------------------------------------------------------
 
-def _format_post(product_name: str, price: str, url: str, installments: str = "", coupon: str = "", has_prime: bool = False, teaser: str = "") -> str:
+def _format_post(product_name: str, price: str, url: str, installments: str = "", coupon: str = "", has_prime: bool = False, teaser: str = "", has_subscribe_and_save: bool = False) -> str:
     """Monta o bloco de texto final para postagem no canal.
 
     Formato HTML compatível com Telegram (ParseMode.HTML).
@@ -515,6 +524,7 @@ def _format_post(product_name: str, price: str, url: str, installments: str = ""
         coupon: Código do cupom (ex: 'POUPEAGORA').
         has_prime: True se for oferta exclusiva Prime.
         teaser: Texto opcional de chamada/engajamento.
+        has_subscribe_and_save: True se for preço com Programe e Poupe.
 
     Returns:
         String formatada em HTML para postagem.
@@ -543,6 +553,10 @@ def _format_post(product_name: str, price: str, url: str, installments: str = ""
     # Selo Prime
     if has_prime:
         post += f"👑 <i>Exclusivo Membros Prime</i>\n"
+
+    # Selo Programe e Poupe
+    if has_subscribe_and_save:
+        post += f"🔄 <i>Valor com Programe e Poupe</i>\n"
 
     # Link de afiliado
     if url:
@@ -633,13 +647,14 @@ def _extract_coupon_benefit(text: str) -> str:
     return "Cupom Especial Amazon"
 
 
-def _format_coupon_post(benefit: str, url: str, coupon: str, has_prime: bool, teaser: str) -> str:
+def _format_coupon_post(benefit: str, url: str, coupon: str, has_prime: bool, teaser: str, has_subscribe_and_save: bool = False) -> str:
     """Formata o post especial para anúncio de cupons gerais."""
     trigger = "🔥 CUPOM AMAZON 🔥"
     teaser_block = f"✨ <i>{teaser}</i>\n\n" if teaser else ""
     benefit_block = f"🛒 <b>{benefit}</b>"
     coupon_block = f"\n🎟️ Cupom: <b>{coupon}</b>" if coupon else ""
     prime_block = f"\n\n👑 <i>Exclusivo Membros Prime</i>" if has_prime else ""
+    sns_block = f"\n\n🔄 <i>Valor com Programe e Poupe</i>" if has_subscribe_and_save else ""
     url_block = f"\n\n🔗 {url}" if url else ""
     return (
         f"{trigger}\n\n"
@@ -648,6 +663,7 @@ def _format_coupon_post(benefit: str, url: str, coupon: str, has_prime: bool, te
         f"{coupon_block}"
         f"{url_block}"
         f"{prime_block}"
+        f"{sns_block}"
     )
 
 
@@ -673,12 +689,14 @@ def process(text: str) -> str | None:
     if not url:
         return None
 
+    has_subscribe_and_save = _check_subscribe_and_save(text)
+
     if _is_coupon_announcement(text):
         coupon = _extract_coupon(text)
         benefit = _extract_coupon_benefit(text)
         has_prime = _check_prime(text)
         teaser = _extract_teaser(text, benefit)
-        return _format_coupon_post(benefit, url, coupon, has_prime, teaser)
+        return _format_coupon_post(benefit, url, coupon, has_prime, teaser, has_subscribe_and_save)
 
     product_name = _extract_product_name(text)
     price = _extract_price(text)
@@ -687,7 +705,7 @@ def process(text: str) -> str | None:
     has_prime = _check_prime(text)
     teaser = _extract_teaser(text, product_name)
 
-    return _format_post(product_name, price, url, installments, coupon, has_prime, teaser)
+    return _format_post(product_name, price, url, installments, coupon, has_prime, teaser, has_subscribe_and_save)
 
 
 async def _extract_first_amazon_url_async(text: str) -> str:
@@ -730,12 +748,14 @@ async def process_async(text: str) -> str | None:
     if not url:
         return None
 
+    has_subscribe_and_save = _check_subscribe_and_save(text)
+
     if _is_coupon_announcement(text):
         coupon = _extract_coupon(text)
         benefit = _extract_coupon_benefit(text)
         has_prime = _check_prime(text)
         teaser = _extract_teaser(text, benefit)
-        return _format_coupon_post(benefit, url, coupon, has_prime, teaser)
+        return _format_coupon_post(benefit, url, coupon, has_prime, teaser, has_subscribe_and_save)
 
     product_name = _extract_product_name(text)
     price = _extract_price(text)
@@ -744,5 +764,5 @@ async def process_async(text: str) -> str | None:
     has_prime = _check_prime(text)
     teaser = _extract_teaser(text, product_name)
 
-    return _format_post(product_name, price, url, installments, coupon, has_prime, teaser)
+    return _format_post(product_name, price, url, installments, coupon, has_prime, teaser, has_subscribe_and_save)
 

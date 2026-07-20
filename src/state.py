@@ -24,6 +24,7 @@ Nota sobre transações:
 """
 
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Caminho do banco de dados local (fora do src/ para não versionar acidentalmente)
@@ -98,48 +99,75 @@ def already_posted(msg_id: str) -> bool:
     return row is not None
 
 
-def asin_already_posted(asin: str, price: str | None = None, within_hours: int = 24) -> bool:
-    """Verifica se o ASIN já foi postado no canal dentro da janela de horas especificada.
+def parse_price(p: str | None) -> float | None:
+    """Extrai o valor numérico (float) de uma string de preço formatada em Real (BRL)."""
+    if not p:
+        return None
+    p_clean = p.upper().replace("R$", "").replace(" ", "").replace("\xa0", "").strip()
+    if "," in p_clean:
+        p_clean = p_clean.replace(".", "").replace(",", ".")
+    try:
+        return float(p_clean)
+    except ValueError:
+        return None
 
-    Se o preço for fornecido, compara o preço atual com o preço da última postagem deste ASIN.
-    Se o preço atual for diferente do preço da última postagem, permite postar novamente (False).
-    Se o preço for igual (ou não fornecido), barra a postagem (True).
+
+def asin_already_posted(asin: str, price: str | None = None, within_hours: int = 24) -> bool:
+    """Verifica se o ASIN já foi postado no canal dentro da janela de deduplicação.
+
+    A janela é de:
+    - 48 horas se houver uma baixa de pelo menos 10% no preço em relação à última postagem.
+    - 8 dias (192 horas) caso contrário.
 
     Args:
         asin: O ASIN do produto Amazon (10 caracteres).
-        price: Preço do produto para checagem dupla.
-        within_hours: Janela de tempo em horas para considerar duplicidade.
+        price: Preço do produto para checagem de variação.
+        within_hours: Mantido para compatibilidade de assinatura, mas ignorado em favor das regras dinâmicas.
 
     Returns:
-        True se já foi postado com o mesmo preço recentemente, False caso contrário.
+        True se já foi postado dentro da janela aplicável, False caso contrário.
     """
     if not asin:
         return False
     conn = _get_conn()
     row = conn.execute(
-        "SELECT price FROM posted_messages "
-        "WHERE asin = ? AND posted_at >= datetime('now', ?) "
+        "SELECT price, posted_at FROM posted_messages "
+        "WHERE asin = ? "
         "ORDER BY posted_at DESC LIMIT 1",
-        (asin, f"-{within_hours} hours")
+        (asin,)
     ).fetchone()
 
     if row is None:
         return False
 
-    # Se encontramos um registro recente e temos preço, comparamos
-    if price is not None:
-        last_price = row[0]
+    last_price, last_posted_str = row
 
-        # Compara preços normalizados (limpos de R$, ponto, espaços e quebras de linha/non-breaking spaces)
-        def clean_p(p):
-            if not p:
-                return ""
-            return p.upper().replace("R$", "").replace(".", "").replace(" ", "").replace("\xa0", "").strip()
+    # Parse data da última postagem
+    try:
+        last_posted_dt = datetime.strptime(last_posted_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            last_posted_dt = datetime.fromisoformat(last_posted_str.replace(" ", "T"))
+        except ValueError:
+            return False
 
-        if clean_p(last_price) != clean_p(price):
-            return False  # Preço mudou! Permite postagem
+    now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    elapsed_hours = (now_dt - last_posted_dt).total_seconds() / 3600.0
 
-    return True  # Sem preço para comparar ou preço igual -> Bloqueia (duplicata)
+    # Determina se há uma baixa de 10% ou mais
+    has_10_percent_drop = False
+    if price is not None and last_price is not None:
+        last_price_float = parse_price(last_price)
+        current_price_float = parse_price(price)
+        if last_price_float is not None and current_price_float is not None and last_price_float > 0:
+            # Baixa de 10% ou mais: preço atual deve ser menor ou igual a 90% do preço anterior
+            if current_price_float <= last_price_float * 0.90 + 1e-9:
+                has_10_percent_drop = True
+
+    # Define o limite de tempo (48h ou 8 dias)
+    limit_hours = 48 if has_10_percent_drop else 192  # 8 dias = 192 horas
+
+    return elapsed_hours < limit_hours
 
 
 def mark_posted(msg_id: str, asin: str | None = None, price: str | None = None) -> None:
