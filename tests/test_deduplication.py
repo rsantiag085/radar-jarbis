@@ -102,6 +102,20 @@ class TestStateDeduplication(unittest.TestCase):
 
         self.assertEqual(count, 1, "Deve haver exatamente 1 registro, mesmo com inserts duplos.")
 
+    def test_platform_prefixes_and_legacy_fallback(self):
+        """Valida que prefixos amazon: e meli: são isolados entre si e compatíveis com legados."""
+        # 1. Isolamento entre plataformas
+        state_module.mark_posted(f"amazon:{self.MSG_ID}")
+        self.assertTrue(state_module.already_posted(f"amazon:{self.MSG_ID}"))
+        self.assertFalse(state_module.already_posted(f"meli:{self.MSG_ID}"))
+
+        # 2. Fallback para registros legados gravados sem prefixo
+        legacy_id = "999999:123"
+        state_module.mark_posted(legacy_id)
+        self.assertTrue(state_module.already_posted(legacy_id))
+        self.assertTrue(state_module.already_posted(f"amazon:{legacy_id}"))
+        self.assertTrue(state_module.already_posted(f"meli:{legacy_id}"))
+
     def test_purge_old_records(self):
         """purge_old_records deve remover apenas registros antigos."""
         state_module.mark_posted(self.MSG_ID)

@@ -8,14 +8,17 @@ O "No Radar do Jarbis" (@noradardojarbis) é uma operação de renda extra basea
 - **ID de Associado Amazon:** noradardojarb-20
 
 ## Nichos de Atuação Iniciais (Foco de Garimpo)
-Para iniciar a operação e avaliar o volume diário de ofertas, o sistema filtrará estritamente as seguintes categorias:
-1. **Itens de Tecnologia:** Notebooks, monitores, teclados, mouses, baterias portáteis, cadeiras gamer e periféricos em geral.
+Para a operação e captação de volume de ofertas, o sistema filtra as seguintes categorias:
+1. **Itens de Tecnologia:** Notebooks, monitores, teclados, mouses, baterias portáteis, cadeiras gamer, memórias RAM (desktop e notebook - DDR4, DDR5, SODIMM) e periféricos em geral.
 2. **Itens Pessoais:** Tênis, perfumes, relógios e body sprays.
-3. **Itens para Casa (Smart Home e Utilidades):** Smart TVs, robôs aspiradores, fechaduras eletrônicas, dispositivos inteligentes, ventilador de mesa (independente de marca), e itens de limpeza/utilidades domésticas (como mops, baldes, esfregões, organizadores, etc.). *(NOTA: Excluir grandes eletrodomésticos e utensílios de cozinha nesta fase inicial)*.
-4. **Beleza e Saúde:** Produtos de cuidados pessoais, cosméticos e suplementação voltados ao bem-estar.
-5. **Supermercado (Alimentos e Bebidas):** Itens de supermercado, como batata frita (Pringles), salgadinhos, chocolates, biscoitos, petiscos, refrigerantes/bebidas, além de condimentos e molhos (ketchup, maionese, mostarda). *(NOTA: Cervejas e bebidas alcoólicas são ativamente excluídas)*.
-6. **Vestuário (Roupas e Acessórios):** Camisetas, camisas, calças, bermudas, cuecas, meias, casacos, jaquetas, vestidos, blusas e roupas em geral.
-7. **Cupons Gerais Amazon:** Cupons de desconto progressivo genéricos (aplicáveis a todo o site da Amazon ou a múltiplos produtos), desde que não promovam categorias ativamente excluídas ou fora do nicho comercial do canal (como livros, ração de pet, brinquedos, fraldas, papelaria, pneus ou ferramentas).
+3. **Itens para Casa (Smart Home e Utilidades):** Smart TVs, robôs aspiradores, fechaduras eletrônicas, dispositivos inteligentes, ventilador de mesa, e itens de limpeza/utilidades domésticas (mops, baldes, organizadores, etc.).
+4. **Casa e Cozinha:** Fogões, cooktops, liquidificadores, panelas, frigideiras e jogos de panelas. *(NOTA: Geladeiras, micro-ondas e cervejas permanecem excluídos)*.
+5. **Beleza e Saúde:** Produtos de cuidados pessoais, cosméticos e suplementação voltados ao bem-estar.
+6. **Supermercado (Alimentos e Bebidas):** Itens de supermercado, como batata frita (Pringles), salgadinhos, chocolates, biscoitos, petiscos, refrigerantes/bebidas, além de condimentos e molhos. *(Cervejas e bebidas alcoólicas são ativamente excluídas)*.
+7. **Vestuário (Roupas e Acessórios):** Camisetas, camisas, calças, bermudas, cuecas, meias, casacos, jaquetas, vestidos, blusas e roupas em geral.
+8. **Livros e Leitura:** Livros físicos, boxes, e-books e Kindle.
+9. **Bebê e Infantil:** Fraldas, lenços umedecidos, mamadeiras, chupetas, carrinhos de bebê e itens de puericultura.
+10. **Cupons Gerais Amazon / Meli:** Cupons de desconto progressivo genéricos aplicáveis a produtos do nicho comercial.
 
 ## Metas Financeiras (Plano Quita-Dívidas)
 - **Fase 1:** Validação do fluxo automático e alcance das primeiras 3 vendas obrigatórias da Amazon (Ativação de Conta).

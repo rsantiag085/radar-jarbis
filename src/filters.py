@@ -18,7 +18,12 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "notebook", "laptop", "monitor", "teclado", "mouse", "bateria portátil",
         "powerbank", "power bank", "cadeira gamer", "cadeira gaming", "periférico",
         "headset", "fone de ouvido", "webcam", "ssd", "hd externo", "pendrive",
-        "hub usb", "placa de vídeo", "processador", "memória ram", "fonte",
+        "hub usb", "placa de vídeo", "processador", "memória ram", "memoria ram",
+        "memória ddr4", "memoria ddr4", "memória ddr5", "memoria ddr5", "ddr4", "ddr5",
+        "memória para notebook", "memoria para notebook", "memória notebook", "memoria notebook",
+        "memória para desktop", "memoria para desktop", "memória desktop", "memoria desktop",
+        "memória para pc", "memoria para pc", "memória pc", "memoria pc",
+        "sodimm", "so-dimm", "dimm", "fonte",
         "gabinete", "cooler", "mousepad", "suporte", "carregador",
     ],
     "pessoal": [
@@ -35,7 +40,11 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "google home", "google nest", "chromecast", "fire tv stick", "apple tv",
         "ventilador de mesa", "mop", "esfregão", "esfregao", "balde", "vassoura",
         "organizador", "varal",
-        # EXCLUÍDO: grandes eletrodomésticos, utensílios de cozinha (CONTEXT.md Fase 1)
+    ],
+    "casa_cozinha": [
+        "fogão", "fogao", "cooktop", "liquidificador", "liquidificadores",
+        "panela", "panelas", "frigideira", "frigideiras", "jogo de panelas",
+        "jogo de panela", "panela de pressão", "panela de pressao",
     ],
     "beleza_saude": [
         "creme", "sérum", "serum", "hidratante", "protetor solar", "base", "batom",
@@ -55,12 +64,21 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "bermuda", "bermudas", "vestido", "vestidos", "blusa", "blusas", "jaqueta", "jaquetas",
         "moletom", "moletons",
     ],
+    "livros": [
+        "livro", "livros", "ebook", "e-book", "box de livros", "kindle",
+        "leitura", "literatura", "graphic novel", "mangá", "manga", "hq", "quadrinhos",
+    ],
+    "bebe_infantil": [
+        "fralda", "fraldas", "lenço umedecido", "lenços umedecidos", "lenco umedecido", "lencos umedecidos",
+        "bebê", "bebe", "mamadeira", "mamadeiras", "chupeta", "chupetas",
+        "carrinho de bebê", "carrinho de bebe", "berço", "berco", "cadeirinha",
+        "pomada de assadura", "pomada para assadura", "huggies", "pampers",
+    ],
 }
 
 # Palavras que indicam categorias EXCLUÍDAS nesta fase (bloqueio explícito)
 _EXCLUDED_KEYWORDS: list[str] = [
-    "geladeira", "fogão", "fogao", "microondas", "liquidificador", "batedeira",
-    "panela", "frigideira", "chaleira", "cafeteira",  # eletrodomésticos/cozinha
+    "geladeira", "microondas", "batedeira", "chaleira", "cafeteira",  # eletrodomésticos restantes
     "cerveja", "cervejas", "chope", "chopp", "baden baden", "heineken",
     "stella artois", "budweiser", "corona", "eisenbahn", "amstel", "skol",
     "brahma", "bohemia", "itaipava", "devassa"
@@ -68,11 +86,10 @@ _EXCLUDED_KEYWORDS: list[str] = [
 
 # Palavras que indicam categorias/produtos fora do nosso nicho (bloqueio específico para cupons gerais)
 _NON_NICHE_KEYWORDS: list[str] = [
-    "livro", "livros", "ebook", "e-book", "leitura", "literatura",
     "ração", "racao", "pet", "gato", "cachorro", "cão", "animal",
     "pneu", "automotivo", "carro", "moto",
-    "brinquedo", "brinquedos", "fralda", "bebê", "bebe", "papelaria",
-    "cozinha", "copo", "prato", "talher", "panela", "casa e cozinha",
+    "brinquedo", "brinquedos", "papelaria",
+    "copo", "prato", "talher",
     "ferramenta", "furadeira", "parafusadeira"
 ]
 

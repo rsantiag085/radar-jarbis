@@ -1,22 +1,26 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Localiza e carrega o arquivo .env (prioriza o da raiz se existir, depois na pasta config)
-_root_env = Path(__file__).parent.parent / ".env"
-_config_env = Path(__file__).parent.parent / "config" / ".env"
+from .config import load_project_env, load_supabase_config
 
-if _root_env.exists():
-    _env_path = _root_env
-elif _config_env.exists():
-    _env_path = _config_env
-else:
-    _env_path = _root_env  # fallback padrão
+# Mantém a precedência existente: .env da raiz e config/.env como fallback.
+load_project_env()
 
-load_dotenv(dotenv_path=_env_path)
+# Configuração centralizada da integração, desabilitada por padrão.
+SUPABASE = load_supabase_config()
+SUPABASE_URL: str | None = SUPABASE.url
+SUPABASE_SERVICE_ROLE_KEY: str | None = SUPABASE.service_role_key
+SUPABASE_ENABLED: bool = SUPABASE.enabled
+SUPABASE_REQUIRED: bool = SUPABASE.required
 
-# Caminho do arquivo de sessão Telethon (gerado na 1ª autenticação)
-SESSION_PATH: Path = Path(__file__).parent.parent / "config" / "session"
+# Caminho do arquivo de sessão Telethon (permite customizar por variável de ambiente para instâncias paralelas)
+_session_name = os.getenv("SESSION_NAME", "session")
+SESSION_PATH: Path = Path(os.getenv("SESSION_PATH", str(Path(__file__).parent.parent / "config" / _session_name)))
+
+# Configurações do Mercado Livre
+MELI_COOKIES: str = os.getenv("MELI_COOKIES", "")
+MELI_USER_ID: str = os.getenv("MELI_USER_ID", "111993671")
+MELI_AFFILIATE_TAG: str = os.getenv("MELI_AFFILIATE_TAG", "noradardojarbis")
 
 try:
     # Parâmetros obrigatórios de infraestrutura e segurança

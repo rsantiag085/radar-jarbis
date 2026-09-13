@@ -501,6 +501,13 @@ class TestIsRelevant(unittest.TestCase):
         self.assertTrue(filters.is_relevant("Ventilador de Mesa Arno 40cm por R$ 189"))
         self.assertTrue(filters.is_relevant("Ventilador de mesa Mondial 30cm por R$ 120"))
 
+    def test_memoria_ram_desktop_notebook_aprovado(self):
+        self.assertTrue(filters.is_relevant("Memória RAM Kingston Fury Beast 16GB DDR4 3200MHz por R$ 249"))
+        self.assertTrue(filters.is_relevant("Memoria RAM Corsair Vengeance 32GB DDR5 5600MHz por R$ 689"))
+        self.assertTrue(filters.is_relevant("Memória para Notebook Crucial 8GB DDR4 SODIMM por R$ 139"))
+        self.assertTrue(filters.is_relevant("Memoria notebook Kingston 16GB SO-DIMM por R$ 220"))
+        self.assertTrue(filters.is_relevant("Pente de Memória Desktop 8GB DDR4 por R$ 119"))
+
     def test_mop_limpeza_aprovado(self):
         self.assertTrue(filters.is_relevant("Mop com Balde e Esfregão Simplo por R$ 49"))
 
@@ -551,8 +558,21 @@ class TestIsRelevant(unittest.TestCase):
     def test_eletrodomestico_microondas_bloqueado(self):
         self.assertFalse(filters.is_relevant("Microondas LG 30L por R$ 399 — 15% off"))
 
-    def test_cozinha_panela_bloqueada(self):
-        self.assertFalse(filters.is_relevant("Panela de pressão elétrica R$ 179"))
+    def test_cozinha_itens_aprovados(self):
+        self.assertTrue(filters.is_relevant("Fogão 4 Bocas Atlas por R$ 699 — 20% off"))
+        self.assertTrue(filters.is_relevant("Liquidificador Mondial Turbo 1200W por R$ 129"))
+        self.assertTrue(filters.is_relevant("Jogo de Panelas Tramontina 5 peças por R$ 199"))
+        self.assertTrue(filters.is_relevant("Panela de pressão elétrica R$ 179"))
+
+    def test_livros_aprovados(self):
+        self.assertTrue(filters.is_relevant("Livro O Poder do Hábito por R$ 39"))
+        self.assertTrue(filters.is_relevant("Box de Livros Harry Potter por R$ 199 — 15% off"))
+        self.assertTrue(filters.is_relevant("Ebook Kindle Hábitos Atômicos por R$ 19"))
+
+    def test_bebe_infantil_aprovados(self):
+        self.assertTrue(filters.is_relevant("Fralda Pampers Confort Sec Mega G por R$ 89"))
+        self.assertTrue(filters.is_relevant("Carrinho de Bebê Galzerano por R$ 499 — 10% off"))
+        self.assertTrue(filters.is_relevant("Lenço Umedecido Huggies 4 pacotes por R$ 29"))
 
     def test_cerveja_bloqueada(self):
         self.assertFalse(filters.is_relevant("Baden Baden Cerveja Ale Golden, Pack 6 unids 350ml por R$ 29"))

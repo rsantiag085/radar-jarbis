@@ -23,12 +23,14 @@ Nota sobre transações:
     o que queremos — a conexão permanece viva entre chamadas.
 """
 
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 # Caminho do banco de dados local (fora do src/ para não versionar acidentalmente)
-DB_PATH = Path(__file__).parent.parent / "config" / "state.db"
+_custom_db = os.getenv("STATE_DB_PATH")
+DB_PATH = Path(_custom_db) if _custom_db else Path(__file__).parent.parent / "config" / "state.db"
 
 # Conexão singleton — None até a primeira chamada a _get_conn()
 _conn: sqlite3.Connection | None = None
@@ -85,14 +87,27 @@ def already_posted(msg_id: str) -> bool:
     """Verifica se a mensagem já foi postada no canal de saída.
 
     Operação de leitura — não abre transação explícita.
+    Suporta busca com prefixo de plataforma (ex: 'amazon:...' ou 'meli:...')
+    com fallback para o formato legado sem prefixo.
 
     Args:
-        msg_id: Identificador único no formato '{chat_id}:{message_id}'.
+        msg_id: Identificador único no formato '{platform}:{chat_id}:{message_id}'
+                ou formato legado '{chat_id}:{message_id}'.
 
     Returns:
         True se já foi postada, False caso contrário.
     """
     conn = _get_conn()
+    if ":" in msg_id:
+        parts = msg_id.split(":", 1)
+        if parts[0] in ("amazon", "meli"):
+            legacy_id = parts[1]
+            row = conn.execute(
+                "SELECT 1 FROM posted_messages WHERE msg_id = ? OR msg_id = ?",
+                (msg_id, legacy_id),
+            ).fetchone()
+            return row is not None
+
     row = conn.execute(
         "SELECT 1 FROM posted_messages WHERE msg_id = ?", (msg_id,)
     ).fetchone()

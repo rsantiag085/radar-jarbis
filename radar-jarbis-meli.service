@@ -1,0 +1,18 @@
+[Unit]
+Description=RadarJarbis - Mercado Livre Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=robson
+Group=robson
+WorkingDirectory=/home/robson/projetos/radar-jarbis
+ExecStart=/home/robson/projetos/radar-jarbis/.venv/bin/python -m src.bot_meli
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=radar-jarbis-meli
+
+[Install]
+WantedBy=multi-user.target

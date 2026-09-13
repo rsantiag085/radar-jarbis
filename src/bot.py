@@ -205,7 +205,7 @@ async def _safe_send(text: str, photo_bytes: bytes | None = None, max_retries: i
 _processing_msg_ids = set()
 
 
-async def process_message_object(chat_id: int, message) -> None:
+async def process_message_object(chat_id: int | str, message) -> None:
     """Processa uma mensagem específica de um canal master.
 
     Pipeline:
@@ -222,8 +222,9 @@ async def process_message_object(chat_id: int, message) -> None:
     if not text:
         return
 
+    effective_chat_id = getattr(message, "chat_id", None) or chat_id
     message_id = message.id
-    msg_id = f"{chat_id}:{message_id}"
+    msg_id = f"amazon:{effective_chat_id}:{message_id}"
 
     # Lock preventivo para evitar concorrência entre carga histórica e eventos em tempo real
     if msg_id in _processing_msg_ids:
@@ -351,10 +352,10 @@ async def main() -> None:
                     "User client autenticado. Processando histórico recente..."
                 )
 
-                # Processa as últimas 10 mensagens de cada canal master
+                # Processa as últimas 5 mensagens de cada canal master
                 for chat in settings.SOURCE_CHANNEL_IDS:
                     try:
-                        messages = await user_client.get_messages(chat, limit=10)
+                        messages = await user_client.get_messages(chat, limit=5)
                         # Inverte para processar da mais antiga para a mais recente
                         for msg in reversed(messages):
                             if msg.text:
