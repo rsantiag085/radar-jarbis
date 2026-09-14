@@ -13,7 +13,6 @@ logger = logging.getLogger("radardojarbis.converters_meli")
 _MELI_TRIGGERS = [
     "🔥 OFERTA MERCADO LIVRE 🔥",
     "⚡ CORRE ANTES QUE ACABE",
-    "📉 MENOR PREÇO HISTÓRICO",
     "💥 SUPER OFERTA DO DIA",
 ]
 
