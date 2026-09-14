@@ -50,8 +50,9 @@ try:
     # Janela de deduplicação de anúncios idênticos (em horas)
     DEDUPLICATION_WINDOW_HOURS: int = int(os.getenv("DEDUPLICATION_WINDOW_HOURS", "24"))
 
-    # Porta de métricas do Prometheus
+    # Portas de métricas do Prometheus
     METRICS_PORT: int = int(os.getenv("METRICS_PORT", "8000"))
+    METRICS_PORT_MELI: int = int(os.getenv("METRICS_PORT_MELI", os.getenv("MELI_METRICS_PORT", "8001")))
 
     # Habilita ou desabilita publicação de cupons gerais da Amazon
     ENABLE_COUPONS: bool = os.getenv("ENABLE_COUPONS", "false").lower() == "true"

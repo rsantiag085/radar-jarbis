@@ -1,0 +1,278 @@
+zabbix_export:
+  version: '6.0'
+  date: '2026-09-13T21:40:00Z'
+  groups:
+    - uuid: '7df96b18c230490a9a0a9e2307226338'
+      name: 'Radar Jarbis'
+  hosts:
+    - host: 'Radar Jarbis'
+      name: 'Radar Jarbis'
+      description: 'Host dedicado exclusivamente às métricas de negócio e aplicação dos bots Amazon e Mercado Livre do Radar Jarbis.'
+      groups:
+        - name: 'Radar Jarbis'
+      interfaces:
+        - ip: 127.0.0.1
+          port: '10050'
+          type: AGENT
+          main: '1'
+          interface_ref: if1
+      items:
+        # =============================================================
+        # 1. BOT AMAZON — ITEM MESTRE & ITENS DEPENDENTES
+        # =============================================================
+        - uuid: 'a1b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Raw Prometheus Metrics'
+          type: HTTP_AGENT
+          key: radar.amazon.metrics
+          delay: 1m
+          history: 1h
+          trends: '0'
+          value_type: TEXT
+          url: 'http://{HOST.CONN}:8000/metrics'
+          status_codes: '200'
+          timeout: 5s
+          interface_ref: if1
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+            - tag: Component
+              value: Prometheus
+
+        - uuid: 'b1b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Mensagens Recebidas Total'
+          type: DEPENDENT
+          key: radar.amazon.messages_received
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_messages_received_total
+                - value
+                - ''
+          master_item:
+            key: radar.amazon.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'c1b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Ofertas Publicadas Total'
+          type: DEPENDENT
+          key: radar.amazon.offers_published
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_offers_published_total
+                - value
+                - ''
+          master_item:
+            key: radar.amazon.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'd1b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Ofertas Filtradas/Descartadas'
+          type: DEPENDENT
+          key: radar.amazon.offers_filtered
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_offers_filtered_total
+                - value
+                - ''
+          master_item:
+            key: radar.amazon.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'e1b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Erros Totais'
+          type: DEPENDENT
+          key: radar.amazon.errors_total
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_errors_total
+                - value
+                - ''
+          master_item:
+            key: radar.amazon.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'f1b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Memória RAM Residente (RSS)'
+          type: DEPENDENT
+          key: radar.amazon.memory_rss
+          delay: '0'
+          history: 7d
+          trends: 90d
+          units: B
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - process_resident_memory_bytes
+                - value
+                - ''
+          master_item:
+            key: radar.amazon.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'a2b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Tentativas de Reconexão'
+          type: DEPENDENT
+          key: radar.amazon.reconnect_attempts
+          delay: '0'
+          history: 7d
+          trends: 90d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_reconnect_attempts
+                - value
+                - ''
+          master_item:
+            key: radar.amazon.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        # =============================================================
+        # 2. BOT MERCADO LIVRE — ITEM MESTRE & ITENS DEPENDENTES
+        # =============================================================
+        - uuid: 'b2b2c3d4e5f647890123456789abcdef'
+          name: 'Mercado Livre - Raw Prometheus Metrics'
+          type: HTTP_AGENT
+          key: radar.meli.metrics
+          delay: 1m
+          history: 1h
+          trends: '0'
+          value_type: TEXT
+          url: 'http://{HOST.CONN}:8001/metrics'
+          status_codes: '200'
+          timeout: 5s
+          interface_ref: if1
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+            - tag: Component
+              value: Prometheus
+
+        - uuid: 'c2b2c3d4e5f647890123456789abcdef'
+          name: 'Mercado Livre - Mensagens Recebidas Total'
+          type: DEPENDENT
+          key: radar.meli.messages_received
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_meli_messages_received_total
+                - value
+                - ''
+          master_item:
+            key: radar.meli.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'd2b2c3d4e5f647890123456789abcdef'
+          name: 'Mercado Livre - Ofertas Publicadas Total'
+          type: DEPENDENT
+          key: radar.meli.offers_published
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_meli_offers_published_total
+                - value
+                - ''
+          master_item:
+            key: radar.meli.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'e2b2c3d4e5f647890123456789abcdef'
+          name: 'Mercado Livre - Ofertas Filtradas/Descartadas'
+          type: DEPENDENT
+          key: radar.meli.offers_filtered
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - radar_meli_offers_filtered_total
+                - value
+                - ''
+          master_item:
+            key: radar.meli.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'f2b2c3d4e5f647890123456789abcdef'
+          name: 'Mercado Livre - Memória RAM Residente (RSS)'
+          type: DEPENDENT
+          key: radar.meli.memory_rss
+          delay: '0'
+          history: 7d
+          trends: 90d
+          units: B
+          value_type: FLOAT
+          preprocessing:
+            - type: PROMETHEUS_PATTERN
+              parameters:
+                - process_resident_memory_bytes
+                - value
+                - ''
+          master_item:
+            key: radar.meli.metrics
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+      # =============================================================
+      # TRIGGERS / ALERTAS DO HOST
+      # =============================================================
+      triggers:
+        - uuid: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d'
+          expression: 'nodata(/Radar Jarbis/radar.amazon.metrics,3m)=1'
+          name: 'Radar Jarbis - Bot Amazon Indisponível (Sem resposta na porta 8000)'
+          priority: HIGH
+          description: 'O endpoint Prometheus do bot Amazon (porta 8000) não respondeu com código 200 nos últimos 3 minutos.'
+
+        - uuid: '2a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d'
+          expression: 'nodata(/Radar Jarbis/radar.meli.metrics,3m)=1'
+          name: 'Radar Jarbis - Bot Mercado Livre Indisponível (Sem resposta na porta 8001)'
+          priority: HIGH
+          description: 'O endpoint Prometheus do bot Mercado Livre (porta 8001) não respondeu com código 200 nos últimos 3 minutos.'

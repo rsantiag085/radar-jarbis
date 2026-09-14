@@ -238,10 +238,11 @@ async def main() -> None:
         )
 
     try:
-        prometheus_client.start_http_server(settings.METRICS_PORT)
-        logger.info(f"Métricas Prometheus ativas na porta {settings.METRICS_PORT}.")
+        meli_metrics_port = getattr(settings, "METRICS_PORT_MELI", 8001)
+        prometheus_client.start_http_server(meli_metrics_port)
+        logger.info(f"Métricas Prometheus do Mercado Livre ativas na porta {meli_metrics_port}.")
     except Exception as e:
-        logger.error(f"Erro ao inicializar Prometheus metrics: {e}")
+        logger.error(f"Erro ao inicializar Prometheus metrics do Mercado Livre: {e}")
 
     attempt = 0
     async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
