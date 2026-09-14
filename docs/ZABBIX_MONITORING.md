@@ -10,34 +10,23 @@ O host `RADAR-DO-JARBIS` (pertencente ao grupo de hosts `RADAR-JARBIS`) é dedic
 
 ```mermaid
 flowchart TD
-    subgraph VM["Instância / VM"]
-        BotAmazon["Bot Amazon (:8000/metrics)"]
-        BotMeli["Bot Mercado Livre (:8001/metrics)"]
+    subgraph GCP["Google Cloud Platform (VMs)"]
+        VM1["VM Amazon\n(Porta 8000/metrics)"]
+        VM2["VM Mercado Livre\n(Porta 8001/metrics)"]
     end
 
-    subgraph Zabbix["Zabbix Server / Proxy"]
+    subgraph Zabbix["Rede Local / Zabbix Server"]
         HostJarbis["Host: RADAR-DO-JARBIS\n(Grupo: RADAR-JARBIS)"]
         
-        MasterAmazon["Master Item: radar.amazon.metrics (HTTP Agent :8000)"]
-        MasterMeli["Master Item: radar.meli.metrics (HTTP Agent :8001)"]
+        MasterAmazon["Item Mestre: radar.amazon.metrics\nhttp://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics"]
+        MasterMeli["Item Mestre: radar.meli.metrics\nhttp://{$MELI_HOST}:{$MELI_PORT}/metrics"]
         
         HostJarbis --> MasterAmazon
         HostJarbis --> MasterMeli
-        
-        MasterAmazon -.-> DepAmz1["Dependent: Ofertas Publicadas"]
-        MasterAmazon -.-> DepAmz2["Dependent: Mensagens Recebidas"]
-        MasterAmazon -.-> DepAmz3["Dependent: Ofertas Filtradas"]
-        MasterAmazon -.-> DepAmz4["Dependent: Erros Totais"]
-        MasterAmazon -.-> DepAmz5["Dependent: RAM Residente (RSS)"]
-        
-        MasterMeli -.-> DepMeli1["Dependent: Ofertas Publicadas"]
-        MasterMeli -.-> DepMeli2["Dependent: Mensagens Recebidas"]
-        MasterMeli -.-> DepMeli3["Dependent: Ofertas Filtradas"]
-        MasterMeli -.-> DepMeli4["Dependent: RAM Residente (RSS)"]
     end
 
-    MasterAmazon -->|GET :8000/metrics| BotAmazon
-    MasterMeli -->|GET :8001/metrics| BotMeli
+    MasterAmazon -->|HTTP GET :8000 (Firewall Restrito)| VM1
+    MasterMeli -->|HTTP GET :8001 (Firewall Restrito)| VM2
 ```
 
 ---
@@ -57,7 +46,7 @@ flowchart TD
 ## 📋 Lista de Itens Criados
 
 ### 1. Bot Amazon
-- **Item Mestre**: `Amazon - Raw Prometheus Metrics` (`radar.amazon.metrics`, HTTP Agent em `http://{HOST.CONN}:8000/metrics`)
+- **Item Mestre**: `Amazon - Raw Prometheus Metrics` (`radar.amazon.metrics`, HTTP Agent em `http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics`)
 - **Itens Dependentes (Prometheus pattern)**:
   - `radar_messages_received_total` ➡️ Mensagens recebidas dos canais de entrada.
   - `radar_offers_published_total` ➡️ Ofertas validadas e postadas no canal de saída.
@@ -67,7 +56,7 @@ flowchart TD
   - `process_resident_memory_bytes` ➡️ Consumo real de memória RAM do processo.
 
 ### 2. Bot Mercado Livre
-- **Item Mestre**: `Mercado Livre - Raw Prometheus Metrics` (`radar.meli.metrics`, HTTP Agent em `http://{HOST.CONN}:8001/metrics`)
+- **Item Mestre**: `Mercado Livre - Raw Prometheus Metrics` (`radar.meli.metrics`, HTTP Agent em `http://{$MELI_HOST}:{$MELI_PORT}/metrics`)
 - **Itens Dependentes (Prometheus pattern)**:
   - `radar_meli_messages_received_total` ➡️ Mensagens recebidas dos canais Meli.
   - `radar_meli_offers_published_total` ➡️ Ofertas Meli convertidas e publicadas.
@@ -76,7 +65,18 @@ flowchart TD
 
 ---
 
+## 🏷️ Macros do Host `RADAR-DO-JARBIS`
+
+| Macro | Valor Padrão | Descrição |
+| :--- | :--- | :--- |
+| `{$AMAZON_HOST}` | `IP_VM_AMAZON_GCLOUD` | IP público ou DNS da VM Amazon no GCP |
+| `{$AMAZON_PORT}` | `8000` | Porta de métricas do bot Amazon |
+| `{$MELI_HOST}` | `IP_VM_MELI_GCLOUD` | IP público ou DNS da VM Mercado Livre no GCP |
+| `{$MELI_PORT}` | `8001` | Porta de métricas do bot Mercado Livre |
+
+---
+
 ## 🚨 Triggers de Alerta
 
-- **`Radar Jarbis - Bot Amazon Indisponível`**: Dispara se o endpoint `http://IP:8000/metrics` parar de responder por mais de 3 minutos.
-- **`Radar Jarbis - Bot Mercado Livre Indisponível`**: Dispara se o endpoint `http://IP:8001/metrics` parar de responder por mais de 3 minutos.
+- **`Radar Jarbis - Bot Amazon Indisponível`**: Dispara se o endpoint `http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics` parar de responder por mais de 3 minutos.
+- **`Radar Jarbis - Bot Mercado Livre Indisponível`**: Dispara se o endpoint `http://{$MELI_HOST}:{$MELI_PORT}/metrics` parar de responder por mais de 3 minutos.
