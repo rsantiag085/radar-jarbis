@@ -4,9 +4,9 @@ Este documento descreve como configurar o monitoramento no Zabbix utilizando os 
 
 ---
 
-## 🎯 Estrutura do Host `Radar Jarbis`
+## 🎯 Estrutura do Host `RADAR-DO-JARBIS` (Grupo: `RADAR-JARBIS`)
 
-O host `Radar Jarbis` é dedicado exclusivamente às **métricas de aplicação e de negócio**. Os recursos de sistema operacional (CPU geral da VM, disco, rede) devem ficar em um host separado (ex: com Template Linux by Zabbix agent).
+O host `RADAR-DO-JARBIS` (pertencente ao grupo de hosts `RADAR-JARBIS`) é dedicado exclusivamente às **métricas de aplicação e de negócio**. Os recursos de sistema operacional (CPU geral da VM, disco, rede) devem ficar em um host separado (ex: com Template Linux by Zabbix agent).
 
 ```mermaid
 flowchart TD
@@ -16,7 +16,7 @@ flowchart TD
     end
 
     subgraph Zabbix["Zabbix Server / Proxy"]
-        HostJarbis["Host: Radar Jarbis"]
+        HostJarbis["Host: RADAR-DO-JARBIS\n(Grupo: RADAR-JARBIS)"]
         
         MasterAmazon["Master Item: radar.amazon.metrics (HTTP Agent :8000)"]
         MasterMeli["Master Item: radar.meli.metrics (HTTP Agent :8001)"]
@@ -50,7 +50,7 @@ flowchart TD
    - Clique no botão **Import** (canto superior direito)
    - Selecione o arquivo `docs/zabbix_host_radar_jarbis.yaml`
    - Marque as opções de atualização e clique em **Import**.
-3. No host recém-criado `Radar Jarbis`, ajuste a interface (IP / DNS) para apontar para o IP da sua VM.
+3. No host recém-criado `RADAR-DO-JARBIS`, ajuste a interface (IP / DNS) para apontar para o IP da sua VM.
 
 ---
 

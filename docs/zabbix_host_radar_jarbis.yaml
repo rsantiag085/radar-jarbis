@@ -3,13 +3,13 @@ zabbix_export:
   date: '2026-09-13T21:40:00Z'
   groups:
     - uuid: '7df96b18c230490a9a0a9e2307226338'
-      name: 'Radar Jarbis'
+      name: 'RADAR-JARBIS'
   hosts:
-    - host: 'Radar Jarbis'
-      name: 'Radar Jarbis'
+    - host: 'RADAR-DO-JARBIS'
+      name: 'RADAR-DO-JARBIS'
       description: 'Host dedicado exclusivamente às métricas de negócio e aplicação dos bots Amazon e Mercado Livre do Radar Jarbis.'
       groups:
-        - name: 'Radar Jarbis'
+        - name: 'RADAR-JARBIS'
       interfaces:
         - ip: 127.0.0.1
           port: '10050'
@@ -266,13 +266,13 @@ zabbix_export:
       # =============================================================
       triggers:
         - uuid: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d'
-          expression: 'nodata(/Radar Jarbis/radar.amazon.metrics,3m)=1'
+          expression: 'nodata(/RADAR-DO-JARBIS/radar.amazon.metrics,3m)=1'
           name: 'Radar Jarbis - Bot Amazon Indisponível (Sem resposta na porta 8000)'
           priority: HIGH
           description: 'O endpoint Prometheus do bot Amazon (porta 8000) não respondeu com código 200 nos últimos 3 minutos.'
 
         - uuid: '2a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d'
-          expression: 'nodata(/Radar Jarbis/radar.meli.metrics,3m)=1'
+          expression: 'nodata(/RADAR-DO-JARBIS/radar.meli.metrics,3m)=1'
           name: 'Radar Jarbis - Bot Mercado Livre Indisponível (Sem resposta na porta 8001)'
           priority: HIGH
           description: 'O endpoint Prometheus do bot Mercado Livre (porta 8001) não respondeu com código 200 nos últimos 3 minutos.'

@@ -3,14 +3,14 @@ zabbix_export:
   date: '2026-09-13T21:30:00Z'
   groups:
     - uuid: '7df96b18c230490a9a0a9e2307226338'
-      name: 'Radar Jarbis'
+      name: 'RADAR-JARBIS'
   templates:
     - uuid: '89a19c72e2aa4f358a443be7a469e347'
       template: 'Template Radar Jarbis'
       name: 'Template Radar Jarbis'
       description: 'Template para monitoramento de métricas dos bots Radar Jarbis (Amazon e Mercado Livre) via endpoints HTTP Prometheus nativos.'
       groups:
-        - name: 'Radar Jarbis'
+        - name: 'RADAR-JARBIS'
       items:
         # -------------------------------------------------------------
         # 1. MASTER ITEM — AMAZON BOT (HTTP Agent)
