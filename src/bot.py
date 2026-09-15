@@ -28,7 +28,7 @@ from telegram import Bot
 from telegram.constants import ParseMode
 from telegram.error import RetryAfter, TelegramError
 
-from . import converters, filters, settings, state
+from . import converters, filters, metrics, settings, state
 
 # ------------------------------------------------------------
 # Logging Estruturado (JSON)
@@ -328,10 +328,20 @@ async def main() -> None:
     logger.info(f"Monitorando {len(settings.SOURCE_CHANNEL_IDS)} canal(is) master.")
     logger.info(f"Canal de saída: {settings.OUTPUT_CHANNEL_ID}")
 
-    # Inicializa o servidor de métricas do Prometheus
+    def get_metrics_payload():
+        return {
+            "messages_received": metrics.extract_counter_value(MESSAGES_RECEIVED),
+            "offers_published": metrics.extract_counter_value(OFFERS_PUBLISHED),
+            "offers_filtered": metrics.extract_counter_value(OFFERS_FILTERED),
+            "errors_total": metrics.extract_counter_value(ERRORS_TOTAL),
+            "reconnect_attempts": metrics.extract_counter_value(RECONNECT_ATTEMPTS),
+            "memory_rss_bytes": metrics.get_process_memory_rss_bytes(),
+        }
+
+    # Inicializa o servidor de métricas (/metrics e /metrics.json)
     try:
-        prometheus_client.start_http_server(settings.METRICS_PORT)
-        logger.info(f"Servidor de métricas do Prometheus ativo na porta {settings.METRICS_PORT}.")
+        metrics.start_metrics_server(settings.METRICS_PORT, json_provider=get_metrics_payload)
+        logger.info(f"Servidor de métricas ativo na porta {settings.METRICS_PORT} (/metrics e /metrics.json).")
     except Exception as e:
         logger.error(f"Erro ao inicializar o servidor de métricas: {e}")
 

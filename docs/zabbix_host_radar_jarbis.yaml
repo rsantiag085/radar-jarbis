@@ -1,6 +1,6 @@
 zabbix_export:
   version: '6.0'
-  date: '2026-09-13T21:40:00Z'
+  date: '2026-09-14T22:20:00Z'
   groups:
     - uuid: '7df96b18c230490a9a0a9e2307226338'
       name: 'RADAR-JARBIS'
@@ -18,17 +18,17 @@ zabbix_export:
           interface_ref: if1
       items:
         # =============================================================
-        # 1. BOT AMAZON — ITEM MESTRE & ITENS DEPENDENTES
+        # 1. BOT AMAZON — ITEM MESTRE JSON & ITENS DEPENDENTES
         # =============================================================
         - uuid: 'a1b2c3d4e5f647890123456789abcdef'
-          name: 'Amazon - Raw Prometheus Metrics'
+          name: 'Amazon - Raw JSON Metrics'
           type: HTTP_AGENT
-          key: radar.amazon.metrics
+          key: radar.amazon.metrics.json
           delay: 1m
           history: 1h
           trends: '0'
           value_type: TEXT
-          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics'
+          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics.json'
           status_codes: '200'
           timeout: 5s
           interface_ref: if1
@@ -36,7 +36,7 @@ zabbix_export:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
             - tag: Component
-              value: Prometheus
+              value: Metrics
 
         - uuid: 'b1b2c3d4e5f647890123456789abcdef'
           name: 'Amazon - Mensagens Recebidas Total'
@@ -47,13 +47,12 @@ zabbix_export:
           trends: 365d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_messages_received_total
-                - value
-                - ''
+                - $.messages_received
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.amazon.metrics
+            key: radar.amazon.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
@@ -67,13 +66,12 @@ zabbix_export:
           trends: 365d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_offers_published_total
-                - value
-                - ''
+                - $.offers_published
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.amazon.metrics
+            key: radar.amazon.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
@@ -87,13 +85,12 @@ zabbix_export:
           trends: 365d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_offers_filtered_total
-                - value
-                - ''
+                - $.offers_filtered
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.amazon.metrics
+            key: radar.amazon.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
@@ -107,13 +104,12 @@ zabbix_export:
           trends: 365d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_errors_total
-                - value
-                - ''
+                - $.errors_total
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.amazon.metrics
+            key: radar.amazon.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
@@ -128,13 +124,12 @@ zabbix_export:
           units: B
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - process_resident_memory_bytes
-                - value
-                - ''
+                - $.memory_rss_bytes
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.amazon.metrics
+            key: radar.amazon.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
@@ -148,29 +143,28 @@ zabbix_export:
           trends: 90d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_reconnect_attempts
-                - value
-                - ''
+                - $.reconnect_attempts
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.amazon.metrics
+            key: radar.amazon.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
 
         # =============================================================
-        # 2. BOT MERCADO LIVRE — ITEM MESTRE & ITENS DEPENDENTES
+        # 2. BOT MERCADO LIVRE — ITEM MESTRE JSON & ITENS DEPENDENTES
         # =============================================================
         - uuid: 'b2b2c3d4e5f647890123456789abcdef'
-          name: 'Mercado Livre - Raw Prometheus Metrics'
+          name: 'Mercado Livre - Raw JSON Metrics'
           type: HTTP_AGENT
-          key: radar.meli.metrics
+          key: radar.meli.metrics.json
           delay: 1m
           history: 1h
           trends: '0'
           value_type: TEXT
-          url: 'http://{$MELI_HOST}:{$MELI_PORT}/metrics'
+          url: 'http://{$MELI_HOST}:{$MELI_PORT}/metrics.json'
           status_codes: '200'
           timeout: 5s
           interface_ref: if1
@@ -178,7 +172,7 @@ zabbix_export:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
             - tag: Component
-              value: Prometheus
+              value: Metrics
 
         - uuid: 'c2b2c3d4e5f647890123456789abcdef'
           name: 'Mercado Livre - Mensagens Recebidas Total'
@@ -189,13 +183,12 @@ zabbix_export:
           trends: 365d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_meli_messages_received_total
-                - value
-                - ''
+                - $.messages_received
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.meli.metrics
+            key: radar.meli.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
@@ -209,13 +202,12 @@ zabbix_export:
           trends: 365d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_meli_offers_published_total
-                - value
-                - ''
+                - $.offers_published
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.meli.metrics
+            key: radar.meli.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
@@ -229,13 +221,12 @@ zabbix_export:
           trends: 365d
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - radar_meli_offers_filtered_total
-                - value
-                - ''
+                - $.offers_filtered
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.meli.metrics
+            key: radar.meli.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
@@ -250,13 +241,12 @@ zabbix_export:
           units: B
           value_type: FLOAT
           preprocessing:
-            - type: PROMETHEUS_PATTERN
+            - type: JSONPATH
               parameters:
-                - process_resident_memory_bytes
-                - value
-                - ''
+                - $.memory_rss_bytes
+              error_handler: DISCARD_VALUE
           master_item:
-            key: radar.meli.metrics
+            key: radar.meli.metrics.json
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
@@ -266,13 +256,13 @@ zabbix_export:
       # =============================================================
       macros:
         - macro: '{$AMAZON_HOST}'
-          value: 'IP_VM_AMAZON_GCLOUD'
+          value: '35.226.101.128'
           description: 'IP publico ou DNS da VM Amazon no GCP'
         - macro: '{$AMAZON_PORT}'
           value: '8000'
           description: 'Porta de metricas do bot Amazon'
         - macro: '{$MELI_HOST}'
-          value: 'IP_VM_MELI_GCLOUD'
+          value: '34.10.13.28'
           description: 'IP publico ou DNS da VM Mercado Livre no GCP'
         - macro: '{$MELI_PORT}'
           value: '8001'
@@ -283,13 +273,13 @@ zabbix_export:
       # =============================================================
       triggers:
         - uuid: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d'
-          expression: 'nodata(/RADAR-DO-JARBIS/radar.amazon.metrics,3m)=1'
+          expression: 'nodata(/RADAR-DO-JARBIS/radar.amazon.metrics.json,3m)=1'
           name: 'Radar Jarbis - Bot Amazon Indisponível (Sem resposta na porta {$AMAZON_PORT})'
           priority: HIGH
-          description: 'O endpoint Prometheus do bot Amazon não respondeu com código 200 nos últimos 3 minutos.'
+          description: 'O endpoint JSON do bot Amazon não respondeu com código 200 nos últimos 3 minutos.'
 
         - uuid: '2a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d'
-          expression: 'nodata(/RADAR-DO-JARBIS/radar.meli.metrics,3m)=1'
+          expression: 'nodata(/RADAR-DO-JARBIS/radar.meli.metrics.json,3m)=1'
           name: 'Radar Jarbis - Bot Mercado Livre Indisponível (Sem resposta na porta {$MELI_PORT})'
           priority: HIGH
-          description: 'O endpoint Prometheus do bot Mercado Livre não respondeu com código 200 nos últimos 3 minutos.'
+          description: 'O endpoint JSON do bot Mercado Livre não respondeu com código 200 nos últimos 3 minutos.'

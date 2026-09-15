@@ -19,7 +19,7 @@ from telegram import Bot
 from telegram.constants import ParseMode
 from telegram.error import RetryAfter, TelegramError
 
-from . import converters, converters_meli, filters, meli, settings, state
+from . import converters, converters_meli, filters, meli, metrics, settings, state
 
 # ------------------------------------------------------------
 # Logging Estruturado (JSON)
@@ -237,12 +237,20 @@ async def main() -> None:
             "mas para gerar os links curtos meli.la oficiais da sua conta de afiliado, defina MELI_COOKIES."
         )
 
+    def get_meli_metrics_payload():
+        return {
+            "messages_received": metrics.extract_counter_value(MELI_MESSAGES_RECEIVED),
+            "offers_published": metrics.extract_counter_value(MELI_OFFERS_PUBLISHED),
+            "offers_filtered": metrics.extract_counter_value(MELI_OFFERS_FILTERED),
+            "memory_rss_bytes": metrics.get_process_memory_rss_bytes(),
+        }
+
     try:
         meli_metrics_port = getattr(settings, "METRICS_PORT_MELI", 8001)
-        prometheus_client.start_http_server(meli_metrics_port)
-        logger.info(f"Métricas Prometheus do Mercado Livre ativas na porta {meli_metrics_port}.")
+        metrics.start_metrics_server(meli_metrics_port, json_provider=get_meli_metrics_payload)
+        logger.info(f"Métricas do Mercado Livre ativas na porta {meli_metrics_port} (/metrics e /metrics.json).")
     except Exception as e:
-        logger.error(f"Erro ao inicializar Prometheus metrics do Mercado Livre: {e}")
+        logger.error(f"Erro ao inicializar metrics do Mercado Livre: {e}")
 
     attempt = 0
     async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
