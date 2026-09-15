@@ -83,6 +83,29 @@ def start_metrics_server(
                 )
                 return [err_payload]
 
+        if path.startswith("/metrics/") or path.startswith("/metric/"):
+            try:
+                metric_key = path.replace("/metrics/", "").replace("/metric/", "").strip()
+                data = json_provider() if json_provider else {}
+                if metric_key in data:
+                    val_str = str(data[metric_key])
+                    payload = val_str.encode("utf-8")
+                    start_response(
+                        "200 OK",
+                        [
+                            ("Content-Type", "text/plain; charset=utf-8"),
+                            ("Content-Length", str(len(payload))),
+                        ],
+                    )
+                    return [payload]
+                else:
+                    start_response("404 Not Found", [("Content-Type", "text/plain")])
+                    return [b"Metric not found"]
+            except Exception as e:
+                logger.error(f"Erro ao obter metrica {path}: {e}")
+                start_response("500 Internal Server Error", [("Content-Type", "text/plain")])
+                return [str(e).encode("utf-8")]
+
         return prom_app(environ, start_response)
 
     class CustomServer(ThreadingWSGIServer):

@@ -68,5 +68,12 @@ class TestMetricsModule(unittest.TestCase):
                 self.assertIn("text/plain", resp.headers.get("Content-Type", ""))
                 text = resp.read().decode("utf-8")
                 self.assertTrue(len(text) > 0)
+
+            # 3. Testa /metrics/<key> (Plain text para Zabbix)
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics/messages_received", timeout=2) as resp:
+                self.assertEqual(resp.status, 200)
+                self.assertIn("text/plain", resp.headers.get("Content-Type", ""))
+                val = resp.read().decode("utf-8")
+                self.assertEqual(val, "123")
         finally:
             httpd.shutdown()
