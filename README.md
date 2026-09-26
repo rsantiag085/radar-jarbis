@@ -1,101 +1,141 @@
-# RadarJarbis Bot 🤖
+# RadarJarbis — Bot Automatizado de Afiliados 🤖
 
-O **RadarJarbis** é o motor de automação exclusivo do ecossistema de afiliados `@noradardojarbis`. Ele foi projetado para monitorar canais de ofertas master do Telegram, filtrar as promoções relevantes, converter links da Amazon para conter sua tag de afiliado de forma automática (inclusive expandindo encurtadores) e publicar em um canal de saída.
+O **RadarJarbis** é um motor de automação profissional para canais de ofertas e afiliados no Telegram. Ele monitora canais de ofertas de entrada (masters), filtra produtos de acordo com nichos e regras de desconto, converte links para as tags de afiliados do operador e publica os posts formatados no canal de destino.
+
+O projeto suporta **dois bots independentes e dedicados**:
+1. **Bot Amazon (`src.bot`)**: Converte links de produtos e encurtadores da Amazon (`amzn.to`, `amazon.com.br`, `a.co`), deduplica por ASIN/preço, extrai dados de parcelamento, selo Prime e cupons.
+2. **Bot Mercado Livre (`src.bot_meli`)**: Converte URLs do Mercado Livre (`mercadolivre.com.br`, `produto.mercadolivre.com.br`), resolve encurtadores e gera links de afiliado oficiais `meli.la`.
 
 ---
 
-## 🚀 Como Iniciar
+## 🏗️ Arquitetura do Sistema
 
-### 1. Configuração do Ambiente (.env)
-O bot suporta a leitura do arquivo `.env` na raiz do projeto (como primeira opção) ou na pasta `config/.env` (como fallback).
+```mermaid
+flowchart TD
+    subgraph Entrada ["📡 Entrada (Telegram MTProto)"]
+        A[Canais de Ofertas Master] -->|Telethon MTProto| B[Leitor de Mensagens]
+    end
 
-Copie o arquivo de exemplo e preencha suas credenciais do Telegram e de Afiliado Amazon:
+    subgraph Processamento ["⚙️ Processamento & Filtros"]
+        B --> C{Filtro de Categorias & Desconto}
+        C -- Rejeitado --> D[Descartado]
+        C -- Aprovado --> E{Deduplicação de Mensagem & ID}
+        E -- Duplicado --> D
+        E -- Novo --> F[Módulo de Conversão de Link]
+        F --> G[Injeção de Tag de Afiliado]
+        G --> H{Deduplicação por ASIN / Item ID}
+        H -- Postado Recentemente --> D
+        H -- Liberado --> I[Formatador de Copywriting HTML]
+    end
+
+    subgraph Saida ["🚀 Saida (Telegram Bot API)"]
+        I --> J[python-telegram-bot]
+        J -->|Rate Limit Cooldown| K[Canal de Ofertas de Destino]
+        K --> L[(SQLite Deduplication DB)]
+    end
+```
+
+---
+
+## ⚡ Início Rápido
+
+Para um guia passo a passo completo voltado a novos usuários e contas de terceiros, consulte o **[Guia de Instalação e Configuração Detalhado](docs/SETUP_GUIDE.md)**.
+
+### 1. Clonar e Instalar Dependências
+```bash
+git clone https://github.com/SEU_USUARIO/radar-jarbis.git
+cd radar-jarbis
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. Configurar Variáveis de Ambiente
+Copie o template de variáveis de ambiente e preencha com suas credenciais:
 ```bash
 cp config/.env.example .env
 ```
 
-Campos obrigatórios no `.env`:
-* `TELEGRAM_API_ID`: ID da API de sua conta (MTProto).
-* `TELEGRAM_API_HASH`: Hash da API de sua conta (MTProto).
-* `TELEGRAM_BOT_TOKEN`: Token do bot gerado pelo [@BotFather](https://t.me/BotFather).
-* `SOURCE_CHANNEL_IDS`: IDs numéricos ou usernames (ex: `@gugaaprova`) dos canais de origem monitorados (separados por vírgula).
-* `OUTPUT_CHANNEL_ID`: Canal do Telegram de destino para publicação das ofertas (ex: `@noradardojarbis`).
-* `AMAZON_AFFILIATE_TAG`: Sua tag de associado Amazon (ex: `noradardojarb-20`).
-* `RATE_LIMIT_DELAY`: Cooldown entre postagens em segundos (padrão `3.5`).
-* `DEDUPLICATION_WINDOW_HOURS`: Janela em horas para deduplicação. (Nota: Para deduplicação de ASIN, aplica-se a janela dinâmica de 48h para queda de preço >= 10% ou 8 dias caso contrário).
+Campos obrigatórios:
+* `TELEGRAM_API_ID`: ID da sua aplicação Telegram (MTProto).
+* `TELEGRAM_API_HASH`: Hash da sua aplicação Telegram (MTProto).
+* `TELEGRAM_BOT_TOKEN`: Token do bot fornecido pelo [@BotFather](https://t.me/BotFather).
+* `SOURCE_CHANNEL_IDS`: IDs numéricos ou usernames dos canais de origem (separados por vírgula).
+* `OUTPUT_CHANNEL_ID`: Canal de destino onde o bot postará as ofertas (ex: `@meucanal`).
+* `AMAZON_AFFILIATE_TAG`: Sua tag de associado Amazon (ex: `seunome-20`).
+* `MELI_AFFILIATE_TAG` / `MELI_USER_ID`: Configurações de afiliado do Mercado Livre.
 
----
+### 3. Execução
 
-## 💻 Execução Local
-
-Para rodar o bot diretamente através do ambiente virtual:
-
-1. Instale as dependências:
-   ```bash
-   .venv/bin/pip install -r requirements.txt
-   ```
-
-2. Execute o bot:
-   ```bash
-   .venv/bin/python -m src.bot
-   ```
-   *(Nota: Na primeira execução, o Telethon solicitará o número de telefone e o código OTP enviado no seu Telegram para criar a sessão persistente).*
-
----
-
-## ⚙️ Gerenciamento via Systemd (Hospedagem em Produção)
-
-O bot está configurado como um serviço de sistema (systemd) para rodar de forma persistente em segundo plano no Linux.
-
-### Comandos de Controle do Serviço:
-
-* **Visualizar logs em tempo real:**
-  ```bash
-  sudo journalctl -u radar-jarbis.service -f -n 50
-  ```
-
-* **Verificar o status detalhado:**
-  ```bash
-  sudo systemctl status radar-jarbis.service
-  ```
-
-* **Reiniciar o bot (necessário após alterar o `.env`):**
-  ```bash
-  sudo systemctl restart radar-jarbis.service
-  ```
-
-* **Parar a execução do bot:**
-  ```bash
-  sudo systemctl stop radar-jarbis.service
-  ```
-
----
-
-## 🛠️ Arquitetura e Fluxo de Funcionamento
-
-```mermaid
-graph TD
-    A[Início do Bot] --> B[Leitura do .env na Raiz/Config]
-    B --> C[Inicialização do Telethon & Bot API]
-    C --> D[Carga Inicial: Escaneamento das últimas 10 msgs dos Canais Master]
-    C --> E[Escuta em Tempo Real: events.NewMessage]
-    D --> F[Processamento de Mensagem]
-    E --> F
-    F --> G{Passa nos Filtros de Categoria/Desconto?}
-    G -- Não --> H[Ignora Oferta]
-    G -- Sim --> I{Mensagem já foi processada anteriormente?}
-    I -- Sim --> H
-    I -- Não --> J{Contém link da Amazon ou encurtador resolúvel?}
-    J -- Não --> K[Descarta & Marca como Processado no DB]
-    J -- Sim --> L[Expande Link & Injeta Tag de Afiliado]
-    L --> M[Extrai preço, parcelamento, cupom, Prime, teaser e imagem]
-    M --> M2{ASIN + Preço já postados na janela?}
-    M2 -- Sim --> H
-    M2 -- Não --> N{Possui imagem original?}
-    N -- Sim --> O[Baixa imagem para RAM & envia como Foto + Legenda]
-    N -- Não --> P[Envia apenas como Mensagem de Texto]
-    O --> Q[Aplica Rate Limit Cooldown]
-    P --> Q
-    Q --> R[Envia para o Canal de Destino]
-    R --> S[Grava ID, ASIN e Preço no Banco SQLite de Deduplicação]
+#### Executar o Bot da Amazon:
+```bash
+.venv/bin/python -m src.bot
 ```
+
+#### Executar o Bot do Mercado Livre:
+```bash
+SESSION_NAME=session_meli .venv/bin/python -m src.bot_meli
+```
+
+---
+
+## ⚙️ Execução em Segundo Plano (Systemd no Linux)
+
+Modelos de serviços prontos com proteções de segurança embutidas:
+- **Amazon**: [`radar-jarbis.service.example`](radar-jarbis.service.example)
+- **Mercado Livre**: [`radar-jarbis-meli.service.example`](radar-jarbis-meli.service.example)
+
+```bash
+# Copiar modelos e ajustar caminhos/usuário
+cp radar-jarbis.service.example radar-jarbis.service
+cp radar-jarbis-meli.service.example radar-jarbis-meli.service
+
+# Instalar no systemd
+sudo cp radar-jarbis*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now radar-jarbis.service
+sudo systemctl enable --now radar-jarbis-meli.service
+```
+
+Comandos de gerenciamento:
+```bash
+# Acompanhar logs em tempo real
+sudo journalctl -u radar-jarbis.service -f -n 50
+sudo journalctl -u radar-jarbis-meli.service -f -n 50
+
+# Reiniciar serviço
+sudo systemctl restart radar-jarbis.service
+```
+
+---
+
+## 🧪 Testes Automatizados
+
+O projeto conta com mais de 130 testes cobrindo filtros de nicho, extração de preços, copywriting, injeção de tags e deduplicação concorrente:
+
+```bash
+# Executar todos os testes
+.venv/bin/python -m unittest discover -s tests -v
+
+# Validar sintaxe Python em todo o projeto
+.venv/bin/python -m compileall -q src tests
+```
+
+---
+
+## 📚 Documentação Adicional
+
+* 📖 **[Guia de Instalação e Configuração para Terceiros](docs/SETUP_GUIDE.md)**: Passo a passo para configurar contas, canais e bots.
+* 🤖 **[Instruções para Agentes e IAs (AGENTS.md)](AGENTS.md)**: Especificações técnicas de arquitetura, regras de negócio e restrições.
+* 📊 **[Guia de Monitoramento Zabbix / Prometheus](docs/ZABBIX_MONITORING.md)**: Templates e endpoints de métricas em tempo real.
+* 🔧 **[Manual de Troubleshooting](docs/MANUAL_TROUBLESHOOTING.md)**: Resolução de dúvidas operacionais e diagnósticos.
+* 🗄️ **[Documentação do Banco de Dados](docs/database.md)**: Estrutura do SQLite de deduplicação e modelo de migração.
+
+---
+
+## 🔒 Segurança e Privacidade
+
+- **Proteção de Credenciais**: Arquivos `.env`, `*.session` (sessões Telethon) e bancos `*.db` estão listados no `.gitignore` e nunca devem ser versionados.
+- **Processamento em Memória**: Mídias (fotos e vídeos) são baixadas em buffer de memória (`io.BytesIO`) e não são persistidas em disco.
+- **Isolamento de Processos**: Os bots da Amazon e do Mercado Livre utilizam arquivos de sessão e bancos de deduplicação isolados, prevenindo concorrência indesejada.

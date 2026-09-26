@@ -269,8 +269,9 @@ def convert_urls(text: str) -> str:
     )
 
 
-async def expandir_e_converter_link(url_encurtada: str, sua_tag: str = "noradardojarb-20") -> str:
+async def expandir_e_converter_link(url_encurtada: str, sua_tag: str | None = None) -> str:
     """Segue os redirecionamentos de links encurtados e injeta a tag de afiliado."""
+    effective_tag = sua_tag or AFFILIATE_TAG
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     try:
         # Método GET com Stream para passar pelas barreiras de segurança da Amazon/Encurtador
@@ -282,7 +283,7 @@ async def expandir_e_converter_link(url_encurtada: str, sua_tag: str = "noradard
             return url_final
             
         # Reaproveita a limpeza de lixo e a injeção da tag na URL expandida
-        return _inject_affiliate_tag(url_final, tag=sua_tag)
+        return _inject_affiliate_tag(url_final, tag=effective_tag)
     except Exception as e:
         print(f"Erro de SRE ao expandir link {url_encurtada}: {e}")
         return url_encurtada

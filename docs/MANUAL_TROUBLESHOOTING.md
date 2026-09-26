@@ -85,7 +85,7 @@ journalctl --user -u radar-jarbis.service -u radar-jarbis-meli.service \
 Para checar quando a última mensagem foi registrada no banco SQLite:
 
 ```bash
-cd /home/robson/projetos/radar-jarbis
+cd /caminho/para/radar-jarbis
 
 .venv/bin/python -c "
 import sqlite3

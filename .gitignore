@@ -30,9 +30,10 @@ env/
 # Logs
 *.log
 
-# Systemd local config
-radar-jarbis.service
+# Systemd local config (apenas versionar .example)
+*.service
+!*.service.example
 
-# Changelog
-CHANGELOG.md
+# Scripts de exploração local
+scratch/
 

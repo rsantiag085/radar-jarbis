@@ -19,8 +19,8 @@ SESSION_PATH: Path = Path(os.getenv("SESSION_PATH", str(Path(__file__).parent.pa
 
 # Configurações do Mercado Livre
 MELI_COOKIES: str = os.getenv("MELI_COOKIES", "")
-MELI_USER_ID: str = os.getenv("MELI_USER_ID", "111993671")
-MELI_AFFILIATE_TAG: str = os.getenv("MELI_AFFILIATE_TAG", "noradardojarbis")
+MELI_USER_ID: str = os.getenv("MELI_USER_ID", "")
+MELI_AFFILIATE_TAG: str = os.getenv("MELI_AFFILIATE_TAG", "suatagmeli")
 
 try:
     # Parâmetros obrigatórios de infraestrutura e segurança
@@ -42,7 +42,7 @@ try:
     OUTPUT_CHANNEL_ID: str = os.environ["OUTPUT_CHANNEL_ID"]
     
     # Tag de afiliado Amazon (opcional, com fallback)
-    AMAZON_AFFILIATE_TAG: str = os.getenv("AMAZON_AFFILIATE_TAG", "noradardojarb-20")
+    AMAZON_AFFILIATE_TAG: str = os.getenv("AMAZON_AFFILIATE_TAG", "seutag-20")
 
     # Delays de controle de spam
     RATE_LIMIT_DELAY: float = float(os.getenv("RATE_LIMIT_DELAY", "3.5"))

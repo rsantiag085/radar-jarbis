@@ -27,7 +27,7 @@ except (TypeError, ValueError):
         f"CRITICAL ERROR: A variável TELEGRAM_API_ID ({API_ID}) não é um número inteiro válido."
     )
 
-CANAL_ORIGEM = 'gugaaprova' 
+CANAL_ORIGEM = os.getenv("SOURCE_CHANNEL_TEST", "canal_origem_exemplo") 
 
 # Inicializa o cliente do Telegram reutilizando a sessão configurada
 _session_path = Path(__file__).parent / "config" / "session"

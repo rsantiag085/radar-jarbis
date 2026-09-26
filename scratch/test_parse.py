@@ -1,5 +1,6 @@
 import sys
-sys.path.insert(0, '/home/robsonsanoliveira/radar-jarbis')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import src.converters as converters
 

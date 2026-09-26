@@ -35,7 +35,7 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
 ### Modificado
 - **Regra de Deduplicação**: Substituição da comparação direta de string de preço por cálculo matemático de variação percentual (limite de 5%) em `state.py` com o helper `parse_price()`.
-- **Documentação de Nível de Contexto**: Alinhados [CONTEXT.md](file:///home/robsonsanoliveira/radar-jarbis/config/context/CONTEXT.md), [GEMINI.md](file:///home/robsonsanoliveira/radar-jarbis/config/context/GEMINI.md) e [GUARDRAILS.md](file:///home/robsonsanoliveira/radar-jarbis/config/context/GUARDRAILS.md) para refletir a exclusão de álcool/cervejas e o limite de deduplicação de 5%.
+- **Documentação de Nível de Contexto**: Alinhados [CONTEXT.md](config/context/CONTEXT.md), [GEMINI.md](config/context/GEMINI.md) e [GUARDRAILS.md](config/context/GUARDRAILS.md) para refletir a exclusão de álcool/cervejas e o limite de deduplicação de 5%.
 
 ---
 
@@ -49,7 +49,7 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
 ### Modificado
 - **Políticas de Exclusão**: Removidas keywords de vestuário/roupas do filtro `_EXCLUDED_KEYWORDS`.
-- **Documentação do Projeto**: Ajustado o [CONTEXT.md](file:///home/robsonsanoliveira/radar-jarbis/config/context/CONTEXT.md) para documentar as novas categorias oficiais.
+- **Documentação do Projeto**: Ajustado o [CONTEXT.md](config/context/CONTEXT.md) para documentar as novas categorias oficiais.
 
 ---
 

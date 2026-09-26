@@ -60,8 +60,8 @@ async def extract_meli_link_and_convert(
     Returns:
         tuple (affiliate_url, item_id)
     """
-    effective_user_id = user_id or getattr(settings, "MELI_USER_ID", "111993671")
-    effective_tag = affiliate_tag or getattr(settings, "MELI_AFFILIATE_TAG", "noradardojarbis")
+    effective_user_id = user_id or getattr(settings, "MELI_USER_ID", "")
+    effective_tag = affiliate_tag or getattr(settings, "MELI_AFFILIATE_TAG", "suatagmeli")
 
     for match in converters._URL_PATTERN.finditer(text):
         raw_url = match.group(0)

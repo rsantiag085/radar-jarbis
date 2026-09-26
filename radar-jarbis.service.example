@@ -1,17 +1,23 @@
 [Unit]
-Description=RadarJarbis - Telegram Bot Service
+Description=RadarJarbis - Amazon Deals Telegram Bot Service
 After=network.target
 
 [Service]
 Type=simple
 User=SEU_USUARIO_LINUX
+Group=SEU_GRUPO_LINUX
 WorkingDirectory=/caminho/para/radar-jarbis
 ExecStart=/caminho/para/radar-jarbis/.venv/bin/python -m src.bot
 Restart=always
 RestartSec=10
-StandardOutput=syslog
-StandardError=syslog
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=radar-jarbis
+
+# Segurança e isolamento
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target

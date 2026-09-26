@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import src.converters as converters
 import src.filters as filters
 
-AFFILIATE_TAG = "noradardojarb-20"
+AFFILIATE_TAG = converters.AFFILIATE_TAG
 
 
 # ===========================================================================
@@ -713,7 +713,7 @@ class TestExpandirEConverterLink(unittest.IsolatedAsyncioTestCase):
         
         with patch("src.converters.httpx.AsyncClient", return_value=mock_client_context):
             res = await converters.expandir_e_converter_link(url_encurtada)
-            self.assertEqual(res, "https://www.amazon.com.br/dp/B09G3HRMVB?tag=noradardojarb-20")
+            self.assertEqual(res, f"https://www.amazon.com.br/dp/B09G3HRMVB?tag={AFFILIATE_TAG}")
 
 
 # ===========================================================================
@@ -770,7 +770,7 @@ class TestProcessAsync(unittest.IsolatedAsyncioTestCase):
         with patch("src.converters.httpx.AsyncClient", return_value=mock_client_context):
             result = await converters.process_async(text)
             self._assert_post_structure(result)
-            self.assertIn("https://www.amazon.com.br/dp/B09G3HRMVB?tag=noradardojarb-20", result)
+            self.assertIn(f"https://www.amazon.com.br/dp/B09G3HRMVB?tag={AFFILIATE_TAG}", result)
 
 
 class TestExtractAsin(unittest.TestCase):

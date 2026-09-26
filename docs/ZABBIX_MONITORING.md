@@ -41,7 +41,7 @@ Cada bot expõe duas interfaces na sua respectiva porta HTTP (`8000` para Amazon
 
 ## 🚀 Como Importar o Host Diretamente no Zabbix
 
-1. Baixe ou copie o arquivo [`docs/zabbix_host_radar_jarbis.yaml`](file:///home/robson/projetos/radar-jarbis/docs/zabbix_host_radar_jarbis.yaml).
+1. Baixe ou copie o arquivo [`docs/zabbix_host_radar_jarbis.yaml`](docs/zabbix_host_radar_jarbis.yaml).
 2. No painel Web do Zabbix, vá em:
    - **Data collection** (ou **Configuration**) ➡️ **Hosts**
    - Clique no botão **Import** (canto superior direito)
@@ -93,4 +93,4 @@ Cada bot expõe duas interfaces na sua respectiva porta HTTP (`8000` para Amazon
 
 ## 🔄 Ponto de Restauração / Rollback
 
-Consulte [`docs/ROLLBACK_MONITORING.md`](file:///home/robson/projetos/radar-jarbis/docs/ROLLBACK_MONITORING.md) para detalhes de reversão ao formato anterior Prometheus text-only caso necessário.
+Consulte [`docs/ROLLBACK_MONITORING.md`](docs/ROLLBACK_MONITORING.md) para detalhes de reversão ao formato anterior Prometheus text-only caso necessário.
