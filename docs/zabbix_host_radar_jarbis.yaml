@@ -1,13 +1,13 @@
 zabbix_export:
   version: '6.0'
-  date: '2026-09-14T23:05:00Z'
+  date: '2026-10-12T21:10:00Z'
   groups:
     - uuid: '7df96b18c230490a9a0a9e2307226338'
       name: 'RADAR-JARBIS'
   hosts:
     - host: 'RADAR-DO-JARBIS'
       name: 'RADAR-DO-JARBIS'
-      description: 'Host dedicado às métricas de aplicação dos bots Amazon e Mercado Livre do Radar Jarbis.'
+      description: 'Host dedicado às métricas de APM e negócio dos bots Amazon e Mercado Livre do Radar Jarbis.'
       groups:
         - name: 'RADAR-JARBIS'
       interfaces:
@@ -18,169 +18,375 @@ zabbix_export:
           interface_ref: if1
       items:
         # =============================================================
-        # 1. BOT AMAZON (HTTP_AGENT direto com endpoints de métricas)
+        # 1. BOT AMAZON - ITEM MESTRE E DEPENDENTES (JSONPath)
         # =============================================================
-        - uuid: 'b1b2c3d4e5f647890123456789abcdef'
-          name: 'Amazon - Mensagens Recebidas'
+        - uuid: 'a1000000000047890123456789abcdef'
+          name: 'Amazon - Raw JSON Metrics'
           type: HTTP_AGENT
-          key: radar.amazon.messages.total
+          key: radar.amazon.metrics.json
           delay: 30s
-          history: 30d
-          trends: 365d
-          value_type: FLOAT
-          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics/messages_received'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics.json'
           status_codes: '200'
           timeout: 5s
           interface_ref: if1
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'b1b2c3d4e5f647890123456789abcdef'
+          name: 'Amazon - Mensagens Recebidas'
+          type: DEPENDENT
+          key: radar.amazon.messages.total
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.messages_received'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
 
         - uuid: 'c1b2c3d4e5f647890123456789abcdef'
           name: 'Amazon - Ofertas Publicadas'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.amazon.offers.published
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: FLOAT
-          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics/offers_published'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.offers_published'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
 
         - uuid: 'd1b2c3d4e5f647890123456789abcdef'
           name: 'Amazon - Ofertas Filtradas'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.amazon.offers.filtered
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: FLOAT
-          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics/offers_filtered'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.offers_filtered'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'd1b2c3d4e5f647890123456789abcd01'
+          name: 'Amazon - Ofertas Filtradas por Duplicidade (ASIN)'
+          type: DEPENDENT
+          key: radar.amazon.offers.filtered.duplicate
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.offers_filtered_by_reason.duplicate_asin'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'd1b2c3d4e5f647890123456789abcd02'
+          name: 'Amazon - Latência Média de Processamento'
+          type: DEPENDENT
+          key: radar.amazon.latency.avg
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          units: s
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.processing_latency_avg_seconds'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
 
         - uuid: 'e1b2c3d4e5f647890123456789abcdef'
           name: 'Amazon - Erros Totais'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.amazon.errors.total
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: FLOAT
-          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics/errors_total'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.errors_total'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Amazon'
+
+        - uuid: 'e1b2c3d4e5f647890123456789abcd03'
+          name: 'Amazon - Erros de Timeout na Bot API'
+          type: DEPENDENT
+          key: radar.amazon.errors.timeout
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.errors_by_type.telegram_api_timeout'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
 
         - uuid: 'f1b2c3d4e5f647890123456789abcdef'
           name: 'Amazon - Tentativas de Reconexao'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.amazon.reconnect.total
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: FLOAT
-          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics/reconnect_attempts'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.reconnect_attempts'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
 
         - uuid: 'a2b2c3d4e5f647890123456789abcdef'
           name: 'Amazon - Memoria RSS'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.amazon.memory.rss
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: UNSIGNED
           units: B
-          url: 'http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics/memory_rss_bytes'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.amazon.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.memory_rss_bytes'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Amazon'
 
         # =============================================================
-        # 2. BOT MERCADO LIVRE (HTTP_AGENT direto)
+        # 2. BOT MERCADO LIVRE - ITEM MESTRE E DEPENDENTES (JSONPath)
         # =============================================================
-        - uuid: 'c2b2c3d4e5f647890123456789abcdef'
-          name: 'Mercado Livre - Mensagens Recebidas'
+        - uuid: 'b2000000000047890123456789abcdef'
+          name: 'Mercado Livre - Raw JSON Metrics'
           type: HTTP_AGENT
-          key: radar.meli.messages.total
+          key: radar.meli.metrics.json
           delay: 30s
-          history: 30d
-          trends: 365d
-          value_type: FLOAT
-          url: 'http://{$MELI_HOST}:{$MELI_PORT}/metrics/messages_received'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          url: 'http://{$MELI_HOST}:{$MELI_PORT}/metrics.json'
           status_codes: '200'
           timeout: 5s
           interface_ref: if1
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'c2b2c3d4e5f647890123456789abcdef'
+          name: 'Mercado Livre - Mensagens Recebidas'
+          type: DEPENDENT
+          key: radar.meli.messages.total
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.messages_received'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
 
         - uuid: 'd2b2c3d4e5f647890123456789abcdef'
           name: 'Mercado Livre - Ofertas Publicadas'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.meli.offers.published
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: FLOAT
-          url: 'http://{$MELI_HOST}:{$MELI_PORT}/metrics/offers_published'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.offers_published'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
 
         - uuid: 'e2b2c3d4e5f647890123456789abcdef'
           name: 'Mercado Livre - Ofertas Filtradas'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.meli.offers.filtered
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: FLOAT
-          url: 'http://{$MELI_HOST}:{$MELI_PORT}/metrics/offers_filtered'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.offers_filtered'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'e2b2c3d4e5f647890123456789abcd01'
+          name: 'Mercado Livre - Ofertas Filtradas por Duplicidade (Item)'
+          type: DEPENDENT
+          key: radar.meli.offers.filtered.duplicate
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.offers_filtered_by_reason.duplicate_item'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'e2b2c3d4e5f647890123456789abcd02'
+          name: 'Mercado Livre - Latência Média de Processamento'
+          type: DEPENDENT
+          key: radar.meli.latency.avg
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          units: s
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.processing_latency_avg_seconds'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'e2b2c3d4e5f647890123456789abcd03'
+          name: 'Mercado Livre - Erros Totais'
+          type: DEPENDENT
+          key: radar.meli.errors.total
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.errors_total'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'e2b2c3d4e5f647890123456789abcd04'
+          name: 'Mercado Livre - Erros de Timeout na Bot API'
+          type: DEPENDENT
+          key: radar.meli.errors.timeout
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.errors_by_type.telegram_api_timeout'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: '0'
+          tags:
+            - tag: Application
+              value: 'Radar Jarbis - Mercado Livre'
+
+        - uuid: 'e2b2c3d4e5f647890123456789abcd05'
+          name: 'Mercado Livre - Tentativas de Reconexao'
+          type: DEPENDENT
+          key: radar.meli.reconnect.total
+          delay: '0'
+          history: 30d
+          trends: 365d
+          value_type: FLOAT
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.reconnect_attempts'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
 
         - uuid: 'f2b2c3d4e5f647890123456789abcdef'
           name: 'Mercado Livre - Memoria RSS'
-          type: HTTP_AGENT
+          type: DEPENDENT
           key: radar.meli.memory.rss
-          delay: 30s
+          delay: '0'
           history: 30d
           trends: 365d
           value_type: UNSIGNED
           units: B
-          url: 'http://{$MELI_HOST}:{$MELI_PORT}/metrics/memory_rss_bytes'
-          status_codes: '200'
-          timeout: 5s
-          interface_ref: if1
+          master_item:
+            key: radar.meli.metrics.json
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.memory_rss_bytes'
           tags:
             - tag: Application
               value: 'Radar Jarbis - Mercado Livre'
@@ -197,13 +403,44 @@ zabbix_export:
 
       triggers:
         - uuid: 't1b2c3d4e5f647890123456789abcdef'
-          expression: 'nodata(/RADAR-DO-JARBIS/radar.amazon.messages.total,3m)=1'
+          expression: 'nodata(/RADAR-DO-JARBIS/radar.amazon.metrics.json,3m)=1'
           name: 'Radar Jarbis - Bot Amazon Indisponível (Sem resposta na porta {$AMAZON_PORT})'
           priority: HIGH
           description: 'O endpoint de métricas do bot Amazon não respondeu nos últimos 3 minutos.'
 
         - uuid: 't2b2c3d4e5f647890123456789abcdef'
-          expression: 'nodata(/RADAR-DO-JARBIS/radar.meli.messages.total,3m)=1'
+          expression: 'nodata(/RADAR-DO-JARBIS/radar.meli.metrics.json,3m)=1'
           name: 'Radar Jarbis - Bot Mercado Livre Indisponível (Sem resposta na porta {$MELI_PORT})'
           priority: HIGH
           description: 'O endpoint de métricas do bot Mercado Livre não respondeu nos últimos 3 minutos.'
+
+        - uuid: 't3b2c3d4e5f647890123456789abcdef'
+          expression: 'change(/RADAR-DO-JARBIS/radar.amazon.errors.total)>5'
+          name: 'Radar Jarbis - Aumento Anormal de Erros no Bot Amazon (>5 em 30s)'
+          priority: AVERAGE
+          description: 'O bot Amazon registrou mais de 5 erros nas últimas coletas.'
+
+        - uuid: 't4b2c3d4e5f647890123456789abcdef'
+          expression: 'change(/RADAR-DO-JARBIS/radar.meli.errors.total)>5'
+          name: 'Radar Jarbis - Aumento Anormal de Erros no Bot Mercado Livre (>5 em 30s)'
+          priority: AVERAGE
+          description: 'O bot Mercado Livre registrou mais de 5 erros nas últimas coletas.'
+
+        - uuid: 't5b2c3d4e5f647890123456789abcdef'
+          expression: 'last(/RADAR-DO-JARBIS/radar.amazon.reconnect.total)>=3'
+          name: 'Radar Jarbis - Loop de Reconexão MTProto Amazon Ativo (>= 3 tentativas)'
+          priority: WARNING
+          description: 'O bot Amazon está tentando reconectar o MTProto seguidamente.'
+
+        - uuid: 't6b2c3d4e5f647890123456789abcdef'
+          expression: 'last(/RADAR-DO-JARBIS/radar.meli.reconnect.total)>=3'
+          name: 'Radar Jarbis - Loop de Reconexão MTProto Mercado Livre Ativo (>= 3 tentativas)'
+          priority: WARNING
+          description: 'O bot Mercado Livre está tentando reconectar o MTProto seguidamente.'
+
+        - uuid: 't7b2c3d4e5f647890123456789abcdef'
+          expression: 'change(/RADAR-DO-JARBIS/radar.amazon.offers.published)=0 and (now() - last(/RADAR-DO-JARBIS/radar.amazon.offers.published, #1)) > 7200'
+          name: 'Radar Jarbis - Nenhuma Oferta Amazon Publicada nas Últimas 2 Horas'
+          priority: INFO
+          manual_close: 'YES'
+          description: 'Possível escassez de ofertas nos canais master ou filtro muito restritivo.'

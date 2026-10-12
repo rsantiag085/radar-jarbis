@@ -56,20 +56,28 @@ Cada bot expõe duas interfaces na sua respectiva porta HTTP (`8000` para Amazon
 ### 1. Bot Amazon
 - **Item Mestre**: `Amazon - Raw JSON Metrics` (`radar.amazon.metrics.json`, HTTP Agent em `http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics.json`)
 - **Itens Dependentes (JSONPath)**:
-  - `radar.amazon.messages_received` (`$.messages_received`) ➡️ Mensagens recebidas dos canais de entrada.
-  - `radar.amazon.offers_published` (`$.offers_published`) ➡️ Ofertas validadas e postadas no canal de saída.
-  - `radar.amazon.offers_filtered` (`$.offers_filtered`) ➡️ Ofertas descartadas por regras de filtros/desconto.
-  - `radar.amazon.errors_total` (`$.errors_total`) ➡️ Quantidade total de erros e exceções capturadas.
-  - `radar.amazon.reconnect_attempts` (`$.reconnect_attempts`) ➡️ Tentativas de reconexão do MTProto.
-  - `radar.amazon.memory_rss` (`$.memory_rss_bytes`) ➡️ Consumo real de memória RAM do processo (Bytes).
+  - `radar.amazon.messages.total` (`$.messages_received`) ➡️ Mensagens recebidas dos canais de entrada.
+  - `radar.amazon.offers.published` (`$.offers_published`) ➡️ Ofertas validadas e postadas no canal de saída.
+  - `radar.amazon.offers.filtered` (`$.offers_filtered`) ➡️ Ofertas descartadas por regras de filtros/desconto.
+  - `radar.amazon.offers.filtered.duplicate` (`$.offers_filtered_by_reason.duplicate_asin`) ➡️ Ofertas descartadas especificamente por duplicidade de ASIN.
+  - `radar.amazon.latency.avg` (`$.processing_latency_avg_seconds`) ➡️ Latência média de processamento em segundos.
+  - `radar.amazon.errors.total` (`$.errors_total`) ➡️ Quantidade total de erros e exceções capturadas.
+  - `radar.amazon.errors.timeout` (`$.errors_by_type.telegram_api_timeout`) ➡️ Ocorrências de timeout da Telegram Bot API.
+  - `radar.amazon.reconnect.total` (`$.reconnect_attempts`) ➡️ Tentativas de reconexão do MTProto.
+  - `radar.amazon.memory.rss` (`$.memory_rss_bytes`) ➡️ Consumo real de memória RAM do processo (Bytes).
 
 ### 2. Bot Mercado Livre
 - **Item Mestre**: `Mercado Livre - Raw JSON Metrics` (`radar.meli.metrics.json`, HTTP Agent em `http://{$MELI_HOST}:{$MELI_PORT}/metrics.json`)
 - **Itens Dependentes (JSONPath)**:
-  - `radar.meli.messages_received` (`$.messages_received`) ➡️ Mensagens recebidas dos canais Meli.
-  - `radar.meli.offers_published` (`$.offers_published`) ➡️ Ofertas Meli convertidas e publicadas.
-  - `radar.meli.offers_filtered` (`$.offers_filtered`) ➡️ Ofertas descartadas por regras de filtros.
-  - `radar.meli.memory_rss` (`$.memory_rss_bytes`) ➡️ Consumo real de memória RAM do processo (Bytes).
+  - `radar.meli.messages.total` (`$.messages_received`) ➡️ Mensagens recebidas dos canais Meli.
+  - `radar.meli.offers.published` (`$.offers_published`) ➡️ Ofertas Meli convertidas e publicadas.
+  - `radar.meli.offers.filtered` (`$.offers_filtered`) ➡️ Ofertas descartadas por regras de filtros.
+  - `radar.meli.offers.filtered.duplicate` (`$.offers_filtered_by_reason.duplicate_item`) ➡️ Ofertas descartadas por duplicidade de Item ID.
+  - `radar.meli.latency.avg` (`$.processing_latency_avg_seconds`) ➡️ Latência média de processamento em segundos.
+  - `radar.meli.errors.total` (`$.errors_total`) ➡️ Quantidade total de erros e exceções capturadas.
+  - `radar.meli.errors.timeout` (`$.errors_by_type.telegram_api_timeout`) ➡️ Ocorrências de timeout da Telegram Bot API.
+  - `radar.meli.reconnect.total` (`$.reconnect_attempts`) ➡️ Tentativas de reconexão do MTProto.
+  - `radar.meli.memory.rss` (`$.memory_rss_bytes`) ➡️ Consumo real de memória RAM do processo (Bytes).
 
 ---
 
@@ -84,10 +92,14 @@ Cada bot expõe duas interfaces na sua respectiva porta HTTP (`8000` para Amazon
 
 ---
 
-## 🚨 Triggers de Alerta
+## 🚨 Triggers de Alerta (APM & Health)
 
-- **`Radar Jarbis - Bot Amazon Indisponível`**: Dispara se o endpoint `http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics.json` parar de responder por mais de 3 minutos.
-- **`Radar Jarbis - Bot Mercado Livre Indisponível`**: Dispara se o endpoint `http://{$MELI_HOST}:{$MELI_PORT}/metrics.json` parar de responder por mais de 3 minutos.
+- **`Radar Jarbis - Bot Amazon Indisponível`**: Dispara se o endpoint `http://{$AMAZON_HOST}:{$AMAZON_PORT}/metrics.json` parar de responder por mais de 3 minutos (`nodata=1`).
+- **`Radar Jarbis - Bot Mercado Livre Indisponível`**: Dispara se o endpoint `http://{$MELI_HOST}:{$MELI_PORT}/metrics.json` parar de responder por mais de 3 minutos (`nodata=1`).
+- **`Aumento Anormal de Erros no Bot Amazon`**: Dispara se `radar.amazon.errors.total` tiver variação > 5 em 30 segundos.
+- **`Aumento Anormal de Erros no Bot Mercado Livre`**: Dispara se `radar.meli.errors.total` tiver variação > 5 em 30 segundos.
+- **`Loop de Reconexão MTProto (>= 3 tentativas)`**: Alerta para Amazon e Meli caso haja falhas persistentes de conexão Telethon.
+- **`Nenhuma Oferta Amazon Publicada nas Últimas 2 Horas`**: Alerta informativo para investigar possível escassez de ofertas ou filtro restritivo.
 
 ---
 
