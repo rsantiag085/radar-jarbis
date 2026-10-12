@@ -20,7 +20,7 @@ from telegram.constants import ParseMode
 from telegram.error import RetryAfter, TelegramError, TimedOut
 from telegram.request import HTTPXRequest
 
-from . import converters, converters_meli, filters, meli, metrics, settings, state
+from . import converters, converters_meli, filters, meli, metrics, settings, state, telemetry
 
 # ------------------------------------------------------------
 # Logging Estruturado (JSON)
@@ -173,22 +173,35 @@ async def process_message_object(chat_id: int | str, message) -> None:
     MELI_MESSAGES_RECEIVED.inc()
     start_time = time.perf_counter()
     reserved_item: str | None = None
+    span = telemetry.start_span(
+        service_name="radar-jarbis-meli",
+        span_name="process_meli_offer",
+        attributes={"chat_id": str(effective_chat_id), "msg_id": str(msg_id)},
+    )
 
     try:
         # Filtro de relevância de conteúdo
         if not filters.is_relevant(text):
             logger.debug(f"[{msg_id}] Reprovado pelo filtro de relevância.")
             MELI_OFFERS_FILTERED.labels(reason="irrelevance").inc()
+            span.set_attribute("filter.reason", "irrelevance")
+            span.log(f"[{msg_id}] Reprovado pelo filtro de relevância.", severity="DEBUG")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: irrelevance")
             return
 
         # Deduplicação no banco de dados local
         if state.already_posted(msg_id):
             logger.debug(f"[{msg_id}] Já postado anteriormente. Ignorando.")
             MELI_OFFERS_FILTERED.labels(reason="duplicate_msg").inc()
+            span.set_attribute("filter.reason", "duplicate_msg")
+            span.log(f"[{msg_id}] Já postado anteriormente.", severity="DEBUG")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate_msg")
             return
 
         category = filters.get_category(text)
         logger.info(f"[{msg_id}] Aprovado — categoria: {category}. Processando Mercado Livre...")
+        span.set_attribute("offer.category", category or "")
+        span.log(f"[{msg_id}] Aprovado — categoria: {category}. Convertendo link Meli...", severity="INFO")
 
         affiliate_url, item_id = await converters_meli.extract_meli_link_and_convert(
             text,
@@ -200,6 +213,9 @@ async def process_message_object(chat_id: int | str, message) -> None:
             logger.info(f"[{msg_id}] Descartado: nenhuma URL Mercado Livre localizada/convertida.")
             MELI_OFFERS_FILTERED.labels(reason="no_meli_url").inc()
             state.mark_posted(msg_id)
+            span.set_attribute("filter.reason", "no_meli_url")
+            span.log(f"[{msg_id}] Descartado: nenhuma URL Mercado Livre localizada/convertida.", severity="INFO")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: no_meli_url")
             return
 
         product_name = converters._extract_product_name(text)
@@ -208,11 +224,19 @@ async def process_message_object(chat_id: int | str, message) -> None:
         coupon = converters._extract_coupon(text)
         teaser = converters._extract_teaser(text, product_name)
 
+        if item_id:
+            span.set_attribute("offer.item_id", item_id)
+        if price:
+            span.set_attribute("offer.price", str(price))
+
         # Guarda contra corrida: o item só é gravado após o envio (após sleep de rate limit).
         if item_id and item_id in _processing_items:
             logger.info(f"[{msg_id}] Descartado: Item Meli ({item_id}) já está em processamento por outra mensagem.")
             MELI_OFFERS_FILTERED.labels(reason="duplicate_item").inc()
             state.mark_posted(msg_id, asin=item_id, price=price)
+            span.set_attribute("filter.reason", "duplicate_item_concurrent")
+            span.log(f"[{msg_id}] Descartado: Item Meli ({item_id}) em processamento concorrente.", severity="INFO")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate_item_concurrent")
             return
         if item_id:
             _processing_items.add(item_id)
@@ -222,6 +246,9 @@ async def process_message_object(chat_id: int | str, message) -> None:
             logger.info(f"[{msg_id}] Descartado: Produto Meli ({item_id}) já postado recentemente com preço ({price}).")
             MELI_OFFERS_FILTERED.labels(reason="duplicate_item").inc()
             state.mark_posted(msg_id, asin=item_id, price=price)
+            span.set_attribute("filter.reason", "duplicate_item_recent")
+            span.log(f"[{msg_id}] Descartado: Item Meli ({item_id}) já postado recentemente com preço ({price}).", severity="INFO")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate_item_recent")
             return
 
         formatted = converters_meli._format_meli_post(
@@ -238,15 +265,25 @@ async def process_message_object(chat_id: int | str, message) -> None:
             try:
                 photo_bytes = await user_client.download_media(message, file=bytes)
                 logger.info(f"[{msg_id}] Imagem da oferta baixada com sucesso (~{len(photo_bytes)} bytes).")
+                span.log(f"[{msg_id}] Imagem baixada ({len(photo_bytes)} bytes).", severity="DEBUG")
             except Exception as e:
                 logger.warning(f"[{msg_id}] Não foi possível baixar imagem: {e}. Enviando texto.")
                 MELI_ERRORS_TOTAL.labels(type="media_download").inc()
+                span.log(f"[{msg_id}] Falha ao baixar imagem: {e}", severity="WARNING")
 
         await asyncio.sleep(settings.RATE_LIMIT_DELAY)
         await _safe_send(formatted, photo_bytes=photo_bytes)
         state.mark_posted(msg_id, asin=item_id, price=price)
+        span.log(f"[{msg_id}] Oferta Meli despachada com sucesso: item_id={item_id}", severity="INFO")
+        span.end(status_code="STATUS_CODE_OK", status_message="Published")
 
+    except Exception as e:
+        span.set_status("STATUS_CODE_ERROR", str(e))
+        span.log(f"[{msg_id}] Exceção inesperada: {e}", severity="ERROR")
+        span.end()
+        raise
     finally:
+        span.end()
         if reserved_item:
             _processing_items.discard(reserved_item)
         _processing_msg_ids.discard(msg_id)

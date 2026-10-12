@@ -29,7 +29,7 @@ from telegram.constants import ParseMode
 from telegram.error import RetryAfter, TelegramError, TimedOut
 from telegram.request import HTTPXRequest
 
-from . import converters, filters, metrics, settings, state
+from . import converters, filters, metrics, settings, state, telemetry
 
 # ------------------------------------------------------------
 # Logging Estruturado (JSON)
@@ -243,23 +243,36 @@ async def process_message_object(chat_id: int | str, message) -> None:
     MESSAGES_RECEIVED.inc()
     start_time = time.perf_counter()
     reserved_asin: str | None = None
+    span = telemetry.start_span(
+        service_name="radar-jarbis-amazon",
+        span_name="process_amazon_offer",
+        attributes={"chat_id": str(effective_chat_id), "msg_id": str(msg_id)},
+    )
 
     try:
         # Filtro de categoria e desconto
         if not filters.is_relevant(text):
             logger.debug(f"[{msg_id}] Reprovado pelo filtro de relevância.")
             OFFERS_FILTERED.labels(reason="irrelevance").inc()
+            span.set_attribute("filter.reason", "irrelevance")
+            span.log(f"[{msg_id}] Reprovado pelo filtro de relevância.", severity="DEBUG")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: irrelevance")
             return
 
         # Deduplicação no banco de dados
         if state.already_posted(msg_id):
             logger.debug(f"[{msg_id}] Já postado anteriormente (por msg_id). Ignorando.")
             OFFERS_FILTERED.labels(reason="duplicate").inc()
+            span.set_attribute("filter.reason", "duplicate")
+            span.log(f"[{msg_id}] Já postado anteriormente (por msg_id).", severity="DEBUG")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate")
             return
 
         # Conversão e formatação
         category = filters.get_category(text)
         logger.info(f"[{msg_id}] Aprovado — categoria: {category}. Processando...")
+        span.set_attribute("offer.category", category or "")
+        span.log(f"[{msg_id}] Aprovado — categoria: {category}. Convertendo links...", severity="INFO")
 
         formatted = await converters.process_async(text)
         if not formatted:
@@ -267,11 +280,18 @@ async def process_message_object(chat_id: int | str, message) -> None:
             OFFERS_FILTERED.labels(reason="no_amazon_url").inc()
             # Marca como processado no banco para evitar reprocessamento futuro
             state.mark_posted(msg_id)
+            span.set_attribute("filter.reason", "no_amazon_url")
+            span.log(f"[{msg_id}] Descartado: nenhuma URL Amazon localizada/convertida.", severity="INFO")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: no_amazon_url")
             return
 
         # Deduplicação por ASIN (mesmo produto de afiliado diferente)
         asin = converters.extract_asin(formatted) or converters.extract_asin(text)
         price = converters.extract_price(text)
+        if asin:
+            span.set_attribute("offer.asin", asin)
+        if price:
+            span.set_attribute("offer.price", str(price))
 
         # Guarda contra corrida: o ASIN só é gravado após o envio (com sleep de rate limit),
         # então mensagens simultâneas do mesmo produto passariam ambas pela checagem.
@@ -279,6 +299,9 @@ async def process_message_object(chat_id: int | str, message) -> None:
             logger.info(f"[{msg_id}] Descartado: ASIN {asin} já está em processamento por outra mensagem.")
             OFFERS_FILTERED.labels(reason="duplicate_asin").inc()
             state.mark_posted(msg_id, asin=asin, price=price)
+            span.set_attribute("filter.reason", "duplicate_asin_concurrent")
+            span.log(f"[{msg_id}] Descartado: ASIN {asin} em processamento concorrente.", severity="INFO")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate_asin_concurrent")
             return
         if asin:
             _processing_asins.add(asin)
@@ -292,6 +315,9 @@ async def process_message_object(chat_id: int | str, message) -> None:
             OFFERS_FILTERED.labels(reason="duplicate_asin").inc()
             # Marca o ID da mensagem para evitar reprocessá-la
             state.mark_posted(msg_id, asin=asin, price=price)
+            span.set_attribute("filter.reason", "duplicate_asin_recent")
+            span.log(f"[{msg_id}] Descartado: ASIN {asin} já postado recentemente com preço ({price}).", severity="INFO")
+            span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate_asin_recent")
             return
 
         # Tenta baixar a foto original do anúncio (se houver)
@@ -300,10 +326,12 @@ async def process_message_object(chat_id: int | str, message) -> None:
             try:
                 photo_bytes = await user_client.download_media(message, file=bytes)
                 logger.info(f"[{msg_id}] Imagem da oferta baixada com sucesso (~{len(photo_bytes)} bytes).")
+                span.log(f"[{msg_id}] Imagem baixada ({len(photo_bytes)} bytes).", severity="DEBUG")
             except Exception as e:
                 warning_msg = f"[{msg_id}] Não foi possível baixar a imagem: {e}. Enviando apenas texto."
                 logger.warning(warning_msg)
                 ERRORS_TOTAL.labels(type="media_download").inc()
+                span.log(warning_msg, severity="WARNING")
 
         # Rate limit antes da postagem (GUARDRAILS.md §3)
         await asyncio.sleep(settings.RATE_LIMIT_DELAY)
@@ -313,7 +341,15 @@ async def process_message_object(chat_id: int | str, message) -> None:
 
         # Marca como postada
         state.mark_posted(msg_id, asin=asin, price=price)
+        span.log(f"[{msg_id}] Oferta Amazon despachada com sucesso: ASIN={asin}", severity="INFO")
+        span.end(status_code="STATUS_CODE_OK", status_message="Published")
+    except Exception as e:
+        span.set_status("STATUS_CODE_ERROR", str(e))
+        span.log(f"[{msg_id}] Exceção inesperada: {e}", severity="ERROR")
+        span.end()
+        raise
     finally:
+        span.end()
         if reserved_asin:
             _processing_asins.discard(reserved_asin)
         _processing_msg_ids.discard(msg_id)
