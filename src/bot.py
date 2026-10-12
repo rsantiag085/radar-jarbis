@@ -26,7 +26,8 @@ from telethon import TelegramClient, events
 from telethon.errors import AuthKeyError, FloodWaitError, UnauthorizedError
 from telegram import Bot
 from telegram.constants import ParseMode
-from telegram.error import RetryAfter, TelegramError
+from telegram.error import RetryAfter, TelegramError, TimedOut
+from telegram.request import HTTPXRequest
 
 from . import converters, filters, metrics, settings, state
 
@@ -186,6 +187,12 @@ async def _safe_send(text: str, photo_bytes: bytes | None = None, max_retries: i
             )
             ERRORS_TOTAL.labels(type="telegram_api_retry_after").inc()
             await asyncio.sleep(wait)
+        except TimedOut as e:
+            # Timeout é ambíguo: o Telegram pode ter entregue a mensagem mesmo sem responder a tempo.
+            # Reenviar causaria posts duplicados no canal, então NÃO retentamos.
+            logger.warning(f"Timeout na Bot API ({e}); entrega incerta — sem reenvio para evitar duplicidade.")
+            ERRORS_TOTAL.labels(type="telegram_api_timeout").inc()
+            return
         except TelegramError as e:
             logger.error(
                 f"Erro na Bot API: {e}. "
@@ -203,6 +210,7 @@ async def _safe_send(text: str, photo_bytes: bytes | None = None, max_retries: i
 # In-memory safety lock to prevent concurrent duplicate processing
 # ------------------------------------------------------------
 _processing_msg_ids = set()
+_processing_asins: set[str] = set()
 
 
 async def process_message_object(chat_id: int | str, message) -> None:
@@ -234,6 +242,7 @@ async def process_message_object(chat_id: int | str, message) -> None:
 
     MESSAGES_RECEIVED.inc()
     start_time = time.perf_counter()
+    reserved_asin: str | None = None
 
     try:
         # Filtro de categoria e desconto
@@ -261,8 +270,20 @@ async def process_message_object(chat_id: int | str, message) -> None:
             return
 
         # Deduplicação por ASIN (mesmo produto de afiliado diferente)
-        asin = converters.extract_asin(formatted)
+        asin = converters.extract_asin(formatted) or converters.extract_asin(text)
         price = converters.extract_price(text)
+
+        # Guarda contra corrida: o ASIN só é gravado após o envio (com sleep de rate limit),
+        # então mensagens simultâneas do mesmo produto passariam ambas pela checagem.
+        if asin and asin in _processing_asins:
+            logger.info(f"[{msg_id}] Descartado: ASIN {asin} já está em processamento por outra mensagem.")
+            OFFERS_FILTERED.labels(reason="duplicate_asin").inc()
+            state.mark_posted(msg_id, asin=asin, price=price)
+            return
+        if asin:
+            _processing_asins.add(asin)
+            reserved_asin = asin
+
         if asin and state.asin_already_posted(asin, price=price, within_hours=settings.DEDUPLICATION_WINDOW_HOURS):
             logger.info(
                 f"[{msg_id}] Descartado: Produto (ASIN: {asin}) já postado "
@@ -293,6 +314,8 @@ async def process_message_object(chat_id: int | str, message) -> None:
         # Marca como postada
         state.mark_posted(msg_id, asin=asin, price=price)
     finally:
+        if reserved_asin:
+            _processing_asins.discard(reserved_asin)
         _processing_msg_ids.discard(msg_id)
         PROCESSING_CONCURRENCY.set(len(_processing_msg_ids))
         PROCESSING_LATENCY.observe(time.perf_counter() - start_time)
@@ -349,7 +372,10 @@ async def main() -> None:
 
     # async with garante bot_client.initialize() na entrada e
     # bot_client.shutdown() → httpx.AsyncClient.aclose() na saída.
-    async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
+    async with Bot(
+        token=settings.TELEGRAM_BOT_TOKEN,
+        request=HTTPXRequest(connect_timeout=10.0, read_timeout=30.0, write_timeout=30.0, pool_timeout=10.0),
+    ) as bot:
         bot_client = bot  # disponibiliza para _safe_send e handle_new_offer
 
         while attempt < _MAX_RECONNECT_ATTEMPTS:

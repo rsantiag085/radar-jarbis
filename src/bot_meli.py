@@ -17,7 +17,8 @@ from telethon import TelegramClient, events
 from telethon.errors import AuthKeyError, FloodWaitError, UnauthorizedError
 from telegram import Bot
 from telegram.constants import ParseMode
-from telegram.error import RetryAfter, TelegramError
+from telegram.error import RetryAfter, TelegramError, TimedOut
+from telegram.request import HTTPXRequest
 
 from . import converters, converters_meli, filters, meli, metrics, settings, state
 
@@ -92,6 +93,7 @@ user_client = TelegramClient(
 
 bot_client: Bot | None = None
 _processing_msg_ids = set()
+_processing_items: set[str] = set()
 
 
 async def _safe_send(text: str, photo_bytes: bytes | None = None, max_retries: int = 3) -> None:
@@ -127,6 +129,11 @@ async def _safe_send(text: str, photo_bytes: bytes | None = None, max_retries: i
             wait = e.retry_after + 1
             logger.warning(f"Rate limit (RetryAfter). Aguardando {wait}s.")
             await asyncio.sleep(wait)
+        except TimedOut as e:
+            # Timeout é ambíguo: o Telegram pode ter entregue a mensagem mesmo sem responder a tempo.
+            # Reenviar causaria posts duplicados no canal, então NÃO retentamos.
+            logger.warning(f"Timeout na Bot API ({e}); entrega incerta — sem reenvio para evitar duplicidade.")
+            return
         except TelegramError as e:
             logger.error(f"Erro na Bot API: {e}. Tentativa {attempt}/{max_retries}.")
             await asyncio.sleep(5)
@@ -151,6 +158,7 @@ async def process_message_object(chat_id: int | str, message) -> None:
 
     MELI_MESSAGES_RECEIVED.inc()
     start_time = time.perf_counter()
+    reserved_item: str | None = None
 
     try:
         # Filtro de relevância de conteúdo
@@ -186,6 +194,16 @@ async def process_message_object(chat_id: int | str, message) -> None:
         coupon = converters._extract_coupon(text)
         teaser = converters._extract_teaser(text, product_name)
 
+        # Guarda contra corrida: o item só é gravado após o envio (após sleep de rate limit).
+        if item_id and item_id in _processing_items:
+            logger.info(f"[{msg_id}] Descartado: Item Meli ({item_id}) já está em processamento por outra mensagem.")
+            MELI_OFFERS_FILTERED.labels(reason="duplicate_item").inc()
+            state.mark_posted(msg_id, asin=item_id, price=price)
+            return
+        if item_id:
+            _processing_items.add(item_id)
+            reserved_item = item_id
+
         if item_id and state.asin_already_posted(item_id, price=price, within_hours=settings.DEDUPLICATION_WINDOW_HOURS):
             logger.info(f"[{msg_id}] Descartado: Produto Meli ({item_id}) já postado recentemente com preço ({price}).")
             MELI_OFFERS_FILTERED.labels(reason="duplicate_item").inc()
@@ -214,6 +232,8 @@ async def process_message_object(chat_id: int | str, message) -> None:
         state.mark_posted(msg_id, asin=item_id, price=price)
 
     finally:
+        if reserved_item:
+            _processing_items.discard(reserved_item)
         _processing_msg_ids.discard(msg_id)
         MELI_PROCESSING_LATENCY.observe(time.perf_counter() - start_time)
 
@@ -253,7 +273,10 @@ async def main() -> None:
         logger.error(f"Erro ao inicializar metrics do Mercado Livre: {e}")
 
     attempt = 0
-    async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
+    async with Bot(
+        token=settings.TELEGRAM_BOT_TOKEN,
+        request=HTTPXRequest(connect_timeout=10.0, read_timeout=30.0, write_timeout=30.0, pool_timeout=10.0),
+    ) as bot:
         bot_client = bot
 
         while attempt < _MAX_RECONNECT_ATTEMPTS:
