@@ -45,6 +45,41 @@ def extract_counter_value(metric: Any) -> float:
     return 0.0
 
 
+def extract_labeled_counter_values(metric: Any) -> Dict[str, float]:
+    """Extrai um dicionário {label_value: count} para cada label de um Counter ou Gauge."""
+    result: Dict[str, float] = {}
+    try:
+        for s in metric.collect():
+            for sample in s.samples:
+                if sample.name.endswith("_total") or sample.name == getattr(metric, "_name", ""):
+                    lbl = list(sample.labels.values())
+                    key = ":".join(lbl) if lbl else "total"
+                    result[key] = float(sample.value)
+    except Exception:
+        pass
+    return result
+
+
+def extract_histogram_stats(metric: Any) -> Dict[str, float]:
+    """Extrai contagem total, soma de tempo acumulado e média em segundos de um Histogram."""
+    count, total_sum = 0.0, 0.0
+    try:
+        for s in metric.collect():
+            for sample in s.samples:
+                if sample.name.endswith("_count"):
+                    count = float(sample.value)
+                elif sample.name.endswith("_sum"):
+                    total_sum = float(sample.value)
+    except Exception:
+        pass
+    avg = (total_sum / count) if count > 0 else 0.0
+    return {
+        "count": count,
+        "sum_seconds": round(total_sum, 4),
+        "avg_seconds": round(avg, 4),
+    }
+
+
 def start_metrics_server(
     port: int,
     json_provider: Optional[Callable[[], Dict[str, Any]]] = None,

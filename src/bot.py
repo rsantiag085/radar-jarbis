@@ -352,11 +352,16 @@ async def main() -> None:
     logger.info(f"Canal de saída: {settings.OUTPUT_CHANNEL_ID}")
 
     def get_metrics_payload():
+        latency_stats = metrics.extract_histogram_stats(PROCESSING_LATENCY)
         return {
             "messages_received": metrics.extract_counter_value(MESSAGES_RECEIVED),
             "offers_published": metrics.extract_counter_value(OFFERS_PUBLISHED),
             "offers_filtered": metrics.extract_counter_value(OFFERS_FILTERED),
+            "offers_filtered_by_reason": metrics.extract_labeled_counter_values(OFFERS_FILTERED),
+            "processing_latency_avg_seconds": latency_stats["avg_seconds"],
+            "processing_latency": latency_stats,
             "errors_total": metrics.extract_counter_value(ERRORS_TOTAL),
+            "errors_by_type": metrics.extract_labeled_counter_values(ERRORS_TOTAL),
             "reconnect_attempts": metrics.extract_counter_value(RECONNECT_ATTEMPTS),
             "memory_rss_bytes": metrics.get_process_memory_rss_bytes(),
         }

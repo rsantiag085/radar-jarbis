@@ -36,6 +36,37 @@ class TestMetricsModule(unittest.TestCase):
         # Objeto inválido deve retornar 0.0 com segurança
         self.assertEqual(metrics.extract_counter_value(None), 0.0)
 
+    def test_extract_labeled_counter_values(self):
+        reg = prometheus_client.CollectorRegistry()
+        counter = prometheus_client.Counter(
+            "test_reasons_counter", "desc", ["reason"], registry=reg
+        )
+        counter.labels(reason="duplicate").inc(12)
+        counter.labels(reason="irrelevance").inc(8)
+        reasons = metrics.extract_labeled_counter_values(counter)
+        self.assertEqual(reasons.get("duplicate"), 12.0)
+        self.assertEqual(reasons.get("irrelevance"), 8.0)
+        self.assertEqual(metrics.extract_labeled_counter_values(None), {})
+
+    def test_extract_histogram_stats(self):
+        reg = prometheus_client.CollectorRegistry()
+        hist = prometheus_client.Histogram(
+            "test_proc_latency", "desc", registry=reg, buckets=[1.0, 5.0, 10.0]
+        )
+        hist.observe(2.0)
+        hist.observe(4.0)
+        stats = metrics.extract_histogram_stats(hist)
+        self.assertEqual(stats["count"], 2.0)
+        self.assertEqual(stats["sum_seconds"], 6.0)
+        self.assertEqual(stats["avg_seconds"], 3.0)
+
+        # Sem observações
+        empty_hist = prometheus_client.Histogram("test_empty_hist", "desc", registry=reg)
+        empty_stats = metrics.extract_histogram_stats(empty_hist)
+        self.assertEqual(empty_stats["count"], 0.0)
+        self.assertEqual(empty_stats["avg_seconds"], 0.0)
+        self.assertEqual(metrics.extract_histogram_stats(None), {"count": 0.0, "sum_seconds": 0.0, "avg_seconds": 0.0})
+
     def test_dual_metrics_server_endpoints(self):
         port = 18999
         data_to_return = {

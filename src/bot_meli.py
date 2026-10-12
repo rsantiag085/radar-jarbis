@@ -258,10 +258,14 @@ async def main() -> None:
         )
 
     def get_meli_metrics_payload():
+        latency_stats = metrics.extract_histogram_stats(MELI_PROCESSING_LATENCY)
         return {
             "messages_received": metrics.extract_counter_value(MELI_MESSAGES_RECEIVED),
             "offers_published": metrics.extract_counter_value(MELI_OFFERS_PUBLISHED),
             "offers_filtered": metrics.extract_counter_value(MELI_OFFERS_FILTERED),
+            "offers_filtered_by_reason": metrics.extract_labeled_counter_values(MELI_OFFERS_FILTERED),
+            "processing_latency_avg_seconds": latency_stats["avg_seconds"],
+            "processing_latency": latency_stats,
             "memory_rss_bytes": metrics.get_process_memory_rss_bytes(),
         }
 
