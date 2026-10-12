@@ -77,6 +77,15 @@ MELI_PROCESSING_LATENCY = prometheus_client.Histogram(
     "Tempo total de processamento de uma mensagem Meli",
     buckets=[0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0]
 )
+MELI_ERRORS_TOTAL = prometheus_client.Counter(
+    "meli_errors_total",
+    "Total de erros e excecoes capturados no bot Meli",
+    ["type"]
+)
+MELI_RECONNECT_ATTEMPTS = prometheus_client.Gauge(
+    "meli_reconnect_attempts",
+    "Contador de tentativas sucessivas de reconexao do loop Meli"
+)
 
 _MAX_RECONNECT_ATTEMPTS = 5
 _RECONNECT_BASE_DELAY = 10
@@ -116,6 +125,7 @@ async def _safe_send(text: str, photo_bytes: bytes | None = None, max_retries: i
                         )
                     except Exception as pe:
                         logger.error(f"Erro ao despachar foto avulsa: {pe}")
+                        MELI_ERRORS_TOTAL.labels(type="media_dispatch").inc()
 
                 await bot_client.send_message(
                     chat_id=settings.OUTPUT_CHANNEL_ID,
@@ -128,17 +138,21 @@ async def _safe_send(text: str, photo_bytes: bytes | None = None, max_retries: i
         except RetryAfter as e:
             wait = e.retry_after + 1
             logger.warning(f"Rate limit (RetryAfter). Aguardando {wait}s.")
+            MELI_ERRORS_TOTAL.labels(type="telegram_api_retry_after").inc()
             await asyncio.sleep(wait)
         except TimedOut as e:
             # Timeout é ambíguo: o Telegram pode ter entregue a mensagem mesmo sem responder a tempo.
             # Reenviar causaria posts duplicados no canal, então NÃO retentamos.
             logger.warning(f"Timeout na Bot API ({e}); entrega incerta — sem reenvio para evitar duplicidade.")
+            MELI_ERRORS_TOTAL.labels(type="telegram_api_timeout").inc()
             return
         except TelegramError as e:
             logger.error(f"Erro na Bot API: {e}. Tentativa {attempt}/{max_retries}.")
+            MELI_ERRORS_TOTAL.labels(type="telegram_api_error").inc()
             await asyncio.sleep(5)
 
     logger.critical("Máximo de tentativas atingido. Mensagem Meli descartada.")
+    MELI_ERRORS_TOTAL.labels(type="message_discarded").inc()
     MELI_OFFERS_FILTERED.labels(reason="max_retries").inc()
 
 
@@ -226,6 +240,7 @@ async def process_message_object(chat_id: int | str, message) -> None:
                 logger.info(f"[{msg_id}] Imagem da oferta baixada com sucesso (~{len(photo_bytes)} bytes).")
             except Exception as e:
                 logger.warning(f"[{msg_id}] Não foi possível baixar imagem: {e}. Enviando texto.")
+                MELI_ERRORS_TOTAL.labels(type="media_download").inc()
 
         await asyncio.sleep(settings.RATE_LIMIT_DELAY)
         await _safe_send(formatted, photo_bytes=photo_bytes)
@@ -266,6 +281,9 @@ async def main() -> None:
             "offers_filtered_by_reason": metrics.extract_labeled_counter_values(MELI_OFFERS_FILTERED),
             "processing_latency_avg_seconds": latency_stats["avg_seconds"],
             "processing_latency": latency_stats,
+            "errors_total": metrics.extract_counter_value(MELI_ERRORS_TOTAL),
+            "errors_by_type": metrics.extract_labeled_counter_values(MELI_ERRORS_TOTAL),
+            "reconnect_attempts": metrics.extract_counter_value(MELI_RECONNECT_ATTEMPTS),
             "memory_rss_bytes": metrics.get_process_memory_rss_bytes(),
         }
 
@@ -287,6 +305,7 @@ async def main() -> None:
             try:
                 await user_client.start()
                 logger.info("Telethon conectado com sucesso!")
+                MELI_RECONNECT_ATTEMPTS.set(0)
 
                 # Processa as 5 mensagens mais recentes de cada canal ao iniciar
                 for chat in settings.SOURCE_CHANNEL_IDS:
@@ -309,6 +328,7 @@ async def main() -> None:
                 await asyncio.sleep(e.seconds)
             except Exception as e:
                 attempt += 1
+                MELI_RECONNECT_ATTEMPTS.set(attempt)
                 delay = min(_RECONNECT_BASE_DELAY * (2 ** (attempt - 1)), _RECONNECT_MAX_DELAY)
                 logger.error(f"Erro no loop principal: {e}. Reconectando em {delay}s...")
                 await asyncio.sleep(delay)
