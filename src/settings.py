@@ -62,6 +62,7 @@ try:
 
     # Intervalo mínimo de cooldown para a mesma categoria e mesmo subtipo de produto (em minutos)
     CATEGORY_COOLDOWN_MINUTES: int = int(os.getenv("CATEGORY_COOLDOWN_MINUTES", "62"))
+    CATEGORY_MAX_POSTS_PER_PLATFORM: int = int(os.getenv("CATEGORY_MAX_POSTS_PER_PLATFORM", "2"))
     SUBTYPE_COOLDOWN_MINUTES: int = int(os.getenv("SUBTYPE_COOLDOWN_MINUTES", "62"))
     POST_COOLDOWN_MIN_MINUTES: int = int(os.getenv("POST_COOLDOWN_MIN_MINUTES", "4"))
     POST_COOLDOWN_MAX_MINUTES: int = int(os.getenv("POST_COOLDOWN_MAX_MINUTES", "14"))

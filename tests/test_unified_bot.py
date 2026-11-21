@@ -80,46 +80,61 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(state.is_subtype_in_cooldown("fone", minutes=62))
         self.assertFalse(state.is_global_in_cooldown())
 
-        # Registra cooldown (categoria + subtipo + global de 4 a 14 min)
+        # Registra 1º post na categoria (ainda NÃO deve entrar em cooldown pois o limite é 2 posts por categoria/plataforma)
         chosen = state.record_cooldown(
             category="tecnologia",
             subtype="fone",
             min_global_minutes=4,
             max_global_minutes=14,
+            platform="amazon",
+            category_window_minutes=62,
+            category_max_posts=2,
         )
         self.assertGreaterEqual(chosen, 4.0)
         self.assertLessEqual(chosen, 14.0)
-        self.assertTrue(state.is_global_in_cooldown())
-        self.assertTrue(state.is_category_in_cooldown("tecnologia", minutes=62))
+        self.assertTrue(state.is_global_in_cooldown(platform="amazon"))
+        self.assertFalse(state.is_category_in_cooldown("tecnologia", minutes=62, platform="amazon", max_posts=2))
         self.assertTrue(state.is_subtype_in_cooldown("fone", minutes=62))
-        self.assertFalse(state.is_category_in_cooldown("pessoal", minutes=62))
+        self.assertFalse(state.is_category_in_cooldown("pessoal", minutes=62, platform="amazon", max_posts=2))
 
-        # Simula expiração do global (20 min atrás), mas categoria ainda ativa (< 62 min)
+        # Registra 2º post na mesma categoria/plataforma -> AGORA entra em cooldown de categoria (2/2)
+        state.record_cooldown(
+            category="tecnologia",
+            subtype="monitor",
+            platform="amazon",
+            category_window_minutes=62,
+            category_max_posts=2,
+        )
+        self.assertTrue(state.is_category_in_cooldown("tecnologia", minutes=62, platform="amazon", max_posts=2))
+        # E a mesma categoria no Meli ainda está livre (0/2)!
+        self.assertFalse(state.is_category_in_cooldown("tecnologia", minutes=62, platform="meli", max_posts=2))
+
+        # Simula expiração do global (20 min atrás), mas categoria ainda ativa (2 posts há 45 min < 62 min)
         conn = sqlite3.connect(state.DB_PATH)
         conn.execute(
-            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-1 minute') WHERE category = '__global_next_allowed__'"
+            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-1 minute') WHERE category = '__post_next_allowed_amazon__'"
         )
         conn.execute(
-            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-45 minutes') WHERE category = 'tecnologia'"
+            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-45 minutes') || '|' || datetime('now', '-30 minutes') WHERE category = 'amazon:tecnologia'"
         )
         conn.execute("UPDATE subtype_cooldowns SET last_posted_at = datetime('now', '-45 minutes')")
         conn.commit()
         conn.close()
 
-        self.assertFalse(state.is_global_in_cooldown())
-        self.assertTrue(state.is_category_in_cooldown("tecnologia", minutes=62))
+        self.assertFalse(state.is_global_in_cooldown(platform="amazon"))
+        self.assertTrue(state.is_category_in_cooldown("tecnologia", minutes=62, platform="amazon", max_posts=2))
         self.assertTrue(state.is_subtype_in_cooldown("fone", minutes=62))
 
-        # Simula expiração de 65 minutos atrás (> 62 min)
+        # Simula expiração de 1 dos posts (65 min atrás e 30 min atrás -> apenas 1 post recente na janela < 2 -> LIBERA!)
         conn = sqlite3.connect(state.DB_PATH)
         conn.execute(
-            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-65 minutes') WHERE category = 'tecnologia'"
+            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-65 minutes') || '|' || datetime('now', '-30 minutes') WHERE category = 'amazon:tecnologia'"
         )
         conn.execute("UPDATE subtype_cooldowns SET last_posted_at = datetime('now', '-65 minutes')")
         conn.commit()
         conn.close()
 
-        self.assertFalse(state.is_category_in_cooldown("tecnologia", minutes=62))
+        self.assertFalse(state.is_category_in_cooldown("tecnologia", minutes=62, platform="amazon", max_posts=2))
         self.assertFalse(state.is_subtype_in_cooldown("fone", minutes=62))
 
     @patch("src.telemetry.start_span")
@@ -239,7 +254,7 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
         conn.commit()
         conn.close()
 
-        # 3º post Amazon da mesma categoria (tecnologia - monitor) após o cooldown da Amazon, mas antes dos 62 min -> bloqueado por CATEGORIA
+        # 2º post Amazon da MESMA categoria (tecnologia - monitor, subtipo diferente) dentro dos 62 min -> PERMITIDO (2º de 2 posts da categoria na Amazon!)
         msg_2 = MagicMock()
         msg_2.id = 203
         msg_2.chat_id = -100222
@@ -250,20 +265,41 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
             "https://www.amazon.com.br/dp/B099999992"
         )
         await bot.process_message_object(-100222, msg_2)
-        self.assertEqual(mock_safe_send.await_count, 2, "Deve bloquear o post da mesma categoria dentro de 62 min.")
+        self.assertEqual(mock_safe_send.await_count, 3, "Deve permitir o 2º post da mesma categoria na Amazon dentro de 62 min.")
 
-        # 4º post Amazon de outra categoria (pessoal - tênis) após o cooldown individual da Amazon -> APROVADO!
-        msg_3 = MagicMock()
-        msg_3.id = 204
-        msg_3.chat_id = -100222
-        msg_3.photo = None
-        msg_3.text = (
+        # Libera novamente o cooldown individual de 4-14 min da Amazon
+        conn = sqlite3.connect(state.DB_PATH)
+        conn.execute(
+            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-1 minute') WHERE category = '__post_next_allowed_amazon__'"
+        )
+        conn.commit()
+        conn.close()
+
+        # 3º post Amazon da MESMA categoria (tecnologia - teclado) dentro dos 62 min -> BLOQUEADO (já atingiu 2 posts de tecnologia na Amazon!)
+        msg_3_blocked = MagicMock()
+        msg_3_blocked.id = 206
+        msg_3_blocked.chat_id = -100222
+        msg_3_blocked.photo = None
+        msg_3_blocked.text = (
+            "⌨️ Teclado Mecânico Gamer\n"
+            "Por R$ 199,00\n"
+            "https://www.amazon.com.br/dp/B099999995"
+        )
+        await bot.process_message_object(-100222, msg_3_blocked)
+        self.assertEqual(mock_safe_send.await_count, 3, "Deve bloquear o 3º post da mesma categoria na Amazon dentro de 62 min.")
+
+        # 4º post Amazon de outra categoria (pessoal - tênis) -> APROVADO!
+        msg_4 = MagicMock()
+        msg_4.id = 204
+        msg_4.chat_id = -100222
+        msg_4.photo = None
+        msg_4.text = (
             "👟 Tênis Adidas Ultraboost\n"
             "Por R$ 499,00\n"
             "https://www.amazon.com.br/dp/B099999994"
         )
-        await bot.process_message_object(-100222, msg_3)
-        self.assertEqual(mock_safe_send.await_count, 3, "Deve permitir post Amazon de outra categoria após o cooldown da Amazon.")
+        await bot.process_message_object(-100222, msg_4)
+        self.assertEqual(mock_safe_send.await_count, 4, "Deve permitir post Amazon de outra categoria.")
 
 
 if __name__ == "__main__":

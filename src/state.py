@@ -219,39 +219,63 @@ def mark_posted(msg_id: str, asin: str | None = None, price: str | None = None) 
         )
 
 
-def is_category_in_cooldown(category: str, minutes: int = 62) -> bool:
-    """Verifica se a categoria está em cooldown (menos de `minutes` minutos desde o último post).
+def _parse_cooldown_timestamps(raw_val: str | None) -> list[datetime]:
+    """Converte o campo `last_posted_at` (que pode conter 1 ou mais timestamps separados por '|')
+    em uma lista de objetos `datetime` válidos."""
+    if not raw_val:
+        return []
+    result: list[datetime] = []
+    for part in str(raw_val).split("|"):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            result.append(datetime.strptime(part, "%Y-%m-%d %H:%M:%S"))
+        except ValueError:
+            try:
+                result.append(datetime.fromisoformat(part.replace(" ", "T")))
+            except ValueError:
+                continue
+    return result
+
+
+def is_category_in_cooldown(
+    category: str,
+    minutes: int = 62,
+    platform: str | None = None,
+    max_posts: int = 2,
+) -> bool:
+    """Verifica se a categoria atingiu o limite de `max_posts` dentro dos últimos `minutes` minutos
+    para a plataforma especificada (ou global se `platform` for None).
 
     Args:
         category: Nome da categoria.
-        minutes: Minutos mínimos exigidos entre posts da mesma categoria.
+        minutes: Janela de tempo em minutos (padrão: 62).
+        platform: Plataforma opcional ('amazon' ou 'meli') para cota individual por plataforma.
+        max_posts: Quantidade máxima de produtos permitidos na janela de `minutes` (padrão: 2).
 
     Returns:
-        True se estiver em cooldown, False caso contrário.
+        True se estiver em cooldown (já atingiu `max_posts` na janela), False caso contrário.
     """
-    if not category or minutes <= 0:
+    if not category or minutes <= 0 or max_posts <= 0:
         return False
+    key = f"{platform}:{category}" if platform else category
     conn = _get_conn()
     row = conn.execute(
         "SELECT last_posted_at FROM category_cooldowns WHERE category = ?",
-        (category,)
+        (key,)
     ).fetchone()
 
     if row is None:
         return False
 
-    last_posted_str = row[0]
-    try:
-        last_posted_dt = datetime.strptime(last_posted_str, "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        try:
-            last_posted_dt = datetime.fromisoformat(last_posted_str.replace(" ", "T"))
-        except ValueError:
-            return False
-
     now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
-    elapsed_minutes = (now_dt - last_posted_dt).total_seconds() / 60.0
-    return elapsed_minutes < minutes
+    timestamps = _parse_cooldown_timestamps(row[0])
+    recent_posts = [
+        dt for dt in timestamps
+        if (now_dt - dt).total_seconds() / 60.0 < minutes
+    ]
+    return len(recent_posts) >= max_posts
 
 
 def is_subtype_in_cooldown(subtype: str, minutes: int = 62) -> bool:
@@ -355,20 +379,39 @@ def record_cooldown(
     min_global_minutes: int = 0,
     max_global_minutes: int = 0,
     platform: str | None = None,
+    category_window_minutes: int = 62,
+    category_max_posts: int = 2,
 ) -> float:
-    """Registra o timestamp atual de postagem para a categoria e/ou subtipo fornecidos
-    e opcionalmente sorteia e registra o cooldown de postagem individual da plataforma.
+    """Registra o timestamp atual de postagem para a categoria (mantendo histórico dos últimos posts
+    na janela para permitir até `category_max_posts` por plataforma) e subtipo, e opcionalmente
+    sorteia e registra o cooldown de postagem individual da plataforma.
 
     Returns:
         Minutos sorteados para o cooldown de postagem (0.0 se não aplicado).
     """
     conn = _get_conn()
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
     with conn:
         if category:
+            cat_key = f"{platform}:{category}" if platform else category
+            row = conn.execute(
+                "SELECT last_posted_at FROM category_cooldowns WHERE category = ?",
+                (cat_key,),
+            ).fetchone()
+            existing_dts = _parse_cooldown_timestamps(row[0]) if row else []
+            recent_strs = [
+                dt.strftime("%Y-%m-%d %H:%M:%S")
+                for dt in existing_dts
+                if (now_dt - dt).total_seconds() / 60.0 < category_window_minutes
+            ]
+            recent_strs.append(now_str)
+            # Mantém apenas os últimos N registros necessários
+            keep_count = max(category_max_posts, 5)
+            joined_val = "|".join(recent_strs[-keep_count:])
             conn.execute(
                 "INSERT OR REPLACE INTO category_cooldowns (category, last_posted_at) VALUES (?, ?)",
-                (category, now_str)
+                (cat_key, joined_val)
             )
         if subtype:
             conn.execute(

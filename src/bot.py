@@ -289,6 +289,7 @@ def _check_variety_cooldown(
     min_post_cd = getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4)
     max_post_cd = getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14)
     cat_minutes = getattr(settings, "CATEGORY_COOLDOWN_MINUTES", 62)
+    cat_max_posts = getattr(settings, "CATEGORY_MAX_POSTS_PER_PLATFORM", 2)
     sub_minutes = getattr(settings, "SUBTYPE_COOLDOWN_MINUTES", 62)
 
     if max_post_cd > 0 and state.is_global_in_cooldown(platform=platform):
@@ -310,11 +311,22 @@ def _check_variety_cooldown(
         span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: subtype_cooldown")
         return True
 
-    if category and state.is_category_in_cooldown(category, minutes=cat_minutes):
-        logger.info(f"[{msg_id}] Descartado: Categoria '{category}' em cooldown ({cat_minutes} min).")
+    if category and state.is_category_in_cooldown(
+        category,
+        minutes=cat_minutes,
+        platform=platform,
+        max_posts=cat_max_posts,
+    ):
+        plat_label = platform or "global"
+        logger.info(
+            f"[{msg_id}] Descartado: Categoria '{category}' ({plat_label}) atingiu {cat_max_posts} post(s) em {cat_minutes} min."
+        )
         filtered_counter.labels(reason="category_cooldown").inc()
         span.set_attribute("filter.reason", "category_cooldown")
-        span.log(f"[{msg_id}] Categoria '{category}' em cooldown.", severity="INFO")
+        span.log(
+            f"[{msg_id}] Categoria '{category}' ({plat_label}) em cooldown ({cat_max_posts} posts / {cat_minutes} min).",
+            severity="INFO",
+        )
         span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: category_cooldown")
         return True
 
@@ -450,8 +462,13 @@ async def _process_amazon_pipeline(
                 min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4),
                 max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14),
                 platform="amazon",
+                category_window_minutes=getattr(settings, "CATEGORY_COOLDOWN_MINUTES", 62),
+                category_max_posts=getattr(settings, "CATEGORY_MAX_POSTS_PER_PLATFORM", 2),
             )
-            logger.info(f"[{msg_id}] Cooldown Amazon registrado (próximo post Amazon liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
+            logger.info(
+                f"[{msg_id}] Cooldown Amazon registrado (próximo post Amazon liberado em {next_cd} min; "
+                f"categoria '{category}' máx {getattr(settings, 'CATEGORY_MAX_POSTS_PER_PLATFORM', 2)} posts / {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min)."
+            )
         span.log(f"[{msg_id}] Oferta Amazon despachada com sucesso: ASIN={asin}", severity="INFO")
         span.end(status_code="STATUS_CODE_OK", status_message="Published")
         return True
@@ -604,8 +621,13 @@ async def _process_meli_pipeline(
                 min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4),
                 max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14),
                 platform="meli",
+                category_window_minutes=getattr(settings, "CATEGORY_COOLDOWN_MINUTES", 62),
+                category_max_posts=getattr(settings, "CATEGORY_MAX_POSTS_PER_PLATFORM", 2),
             )
-            logger.info(f"[{msg_id}] Cooldown Meli registrado (próximo post Meli liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
+            logger.info(
+                f"[{msg_id}] Cooldown Meli registrado (próximo post Meli liberado em {next_cd} min; "
+                f"categoria '{category}' máx {getattr(settings, 'CATEGORY_MAX_POSTS_PER_PLATFORM', 2)} posts / {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min)."
+            )
         span.log(f"[{msg_id}] Oferta Meli despachada com sucesso: item_id={item_id}", severity="INFO")
         span.end(status_code="STATUS_CODE_OK", status_message="Published")
 
