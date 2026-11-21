@@ -521,8 +521,10 @@ class TestIsRelevant(unittest.TestCase):
     def test_mop_limpeza_aprovado(self):
         self.assertTrue(filters.is_relevant("Mop com Balde e Esfregão Simplo por R$ 49"))
 
-    def test_beleza_saude_aprovada(self):
+    def test_beleza_e_saude_aprovadas(self):
         self.assertTrue(filters.is_relevant("Whey Protein Growth 1kg chocolate R$ 89,90"))
+        self.assertTrue(filters.is_relevant("Creatina Monohidratada 300g por R$ 59,90"))
+        self.assertTrue(filters.is_relevant("Perfume Importado Eau de Parfum 100ml por R$ 299"))
         self.assertTrue(
             filters.is_relevant(
                 "EUCERIN Sérum Facial Anti-idade Epigenetic 30ml\nhttps://a.co/d/07sbxRky"
@@ -681,12 +683,24 @@ class TestGetCategory(unittest.TestCase):
     def test_mop_smart_home(self):
         self.assertEqual(filters.get_category("Mop com Balde e Esfregão"), "smart_home")
 
-    def test_beleza_saude(self):
-        self.assertEqual(filters.get_category("Whey Protein 1kg"), "beleza_saude")
+    def test_beleza(self):
         self.assertEqual(
             filters.get_category("EUCERIN Sérum Facial Anti-idade Epigenetic 30ml"),
-            "beleza_saude",
+            "beleza",
         )
+        self.assertEqual(
+            filters.get_category("Perfume Eau de Parfum 100ml"),
+            "beleza",
+        )
+        self.assertEqual(
+            filters.get_category("Shampoo e Condicionador Hidratante"),
+            "beleza",
+        )
+
+    def test_saude(self):
+        self.assertEqual(filters.get_category("Whey Protein 1kg"), "saude")
+        self.assertEqual(filters.get_category("Creatina Monohidratada 300g"), "saude")
+        self.assertEqual(filters.get_category("Vitamina C + Colágeno"), "saude")
 
     def test_pessoal(self):
         self.assertEqual(filters.get_category("Tênis Adidas Ultra Boost"), "pessoal")

@@ -29,9 +29,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "gabinete", "cooler", "mousepad", "suporte", "carregador",
     ],
     "pessoal": [
-        "tênis", "tenis", "sneaker", "perfume", "eau de toilette", "eau de parfum",
-        "colônia", "cologne", "relógio", "relogio", "smartwatch", "body splash",
-        "body spray",
+        "tênis", "tenis", "sneaker", "relógio", "relogio", "smartwatch",
     ],
     "smart_home": [
         "smart tv", "tv 4k", "televisão", "televisao", "robô aspirador",
@@ -48,13 +46,19 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "panela", "panelas", "frigideira", "frigideiras", "jogo de panelas",
         "jogo de panela", "panela de pressão", "panela de pressao",
     ],
-    "beleza_saude": [
-        "creme", "sérum", "serum", "hidratante", "protetor solar", "base", "batom",
-        "máscara", "mascara facial", "esfoliante", "vitamina", "suplemento",
-        "whey protein", "whey", "creatina", "colágeno", "colageno", "ômega",
-        "omega 3", "probiótico", "probiotico", "shampoo", "condicionador",
-        "finalizador", "desodorante", "antitranspirante", "sabonete", "proteína",
-        "eucerin", "anti-idade", "antiidade", "epigenetic", "sérum facial", "serum facial",
+    "beleza": [
+        "perfume", "eau de toilette", "eau de parfum", "colônia", "colonia", "cologne",
+        "body splash", "body spray", "creme", "sérum", "serum", "sérum facial",
+        "serum facial", "hidratante", "protetor solar", "base", "batom", "máscara",
+        "mascara facial", "esfoliante", "shampoo", "condicionador", "finalizador",
+        "desodorante", "antitranspirante", "sabonete", "eucerin", "anti-idade",
+        "antiidade", "epigenetic",
+    ],
+    "saude": [
+        "vitamina", "suplemento", "whey protein", "whey", "creatina", "colágeno",
+        "colageno", "ômega", "omega 3", "probiótico", "probiotico", "proteína",
+        "proteina", "pré-treino", "pre-treino", "glutamina", "multivitamínico",
+        "multivitaminico",
     ],
     "supermercado": [
         "pringles", "batata frita", "batata frita pringles", "salgadinho", "chocolate",
