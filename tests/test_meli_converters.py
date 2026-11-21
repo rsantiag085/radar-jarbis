@@ -47,10 +47,10 @@ class TestMeliConverters(unittest.IsolatedAsyncioTestCase):
             "Compre aqui: https://meli.la/concorrente123"
         )
         # Sem cookies configurados
-        result = await converters_meli.process_async(text, cookies_str="", affiliate_tag="noradardojarbis")
+        result = await converters_meli.process_async(text, cookies_str="", affiliate_tag="suatagmeli")
         self.assertIsNotNone(result)
         self.assertNotIn("https://meli.la/concorrente123", result, "Nunca deve vazar o link do concorrente")
-        self.assertIn("https://www.mercadolivre.com.br/p/MLB61080793?matt_word=noradardojarbis", result)
+        self.assertIn("https://www.mercadolivre.com.br/p/MLB61080793?matt_word=suatagmeli", result)
 
     @patch("httpx.AsyncClient.get")
     async def test_resolve_and_extract_meli_item_from_social_html(self, mock_get):

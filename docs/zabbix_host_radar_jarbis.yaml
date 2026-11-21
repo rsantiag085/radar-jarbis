@@ -346,11 +346,11 @@ zabbix_export:
         value: Radar Jarbis - Mercado Livre
     macros:
     - macro: '{$AMAZON_HOST}'
-      value: 35.226.101.128
+      value: 127.0.0.1
     - macro: '{$AMAZON_PORT}'
       value: '8000'
     - macro: '{$MELI_HOST}'
-      value: 34.10.13.28
+      value: 127.0.0.1
     - macro: '{$MELI_PORT}'
       value: '8001'
   triggers:

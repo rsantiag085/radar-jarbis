@@ -60,6 +60,13 @@ try:
     # Habilita ou desabilita o modo Prime Day para formatação de posts
     PRIME_DAY_MODE: bool = os.getenv("PRIME_DAY_MODE", "false").lower() == "true"
 
+    # Intervalo mínimo de cooldown para a mesma categoria e mesmo subtipo de produto (em minutos)
+    CATEGORY_COOLDOWN_MINUTES: int = int(os.getenv("CATEGORY_COOLDOWN_MINUTES", "62"))
+    SUBTYPE_COOLDOWN_MINUTES: int = int(os.getenv("SUBTYPE_COOLDOWN_MINUTES", "62"))
+    POST_COOLDOWN_MIN_MINUTES: int = int(os.getenv("POST_COOLDOWN_MIN_MINUTES", "7"))
+    POST_COOLDOWN_MAX_MINUTES: int = int(os.getenv("POST_COOLDOWN_MAX_MINUTES", "19"))
+    ENABLE_COOLDOWN: bool = os.getenv("ENABLE_COOLDOWN", "true").lower() == "true"
+
 except KeyError as e:
     raise RuntimeError(
         f"CRITICAL ERROR: A variável de ambiente obrigatória {e} não foi localizada no arquivo config/.env. "

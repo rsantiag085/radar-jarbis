@@ -17,7 +17,9 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "tecnologia": [
         "notebook", "laptop", "monitor", "teclado", "mouse", "bateria portátil",
         "powerbank", "power bank", "cadeira gamer", "cadeira gaming", "periférico",
-        "headset", "fone de ouvido", "webcam", "ssd", "hd externo", "pendrive",
+        "headset", "headset gamer", "headphone", "fone de ouvido", "fone gamer",
+        "redragon", "zeus lite", "havit", "h2232d",
+        "webcam", "ssd", "hd externo", "pendrive",
         "hub usb", "placa de vídeo", "processador", "memória ram", "memoria ram",
         "memória ddr4", "memoria ddr4", "memória ddr5", "memoria ddr5", "ddr4", "ddr5",
         "memória para notebook", "memoria para notebook", "memória notebook", "memoria notebook",
@@ -52,6 +54,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "whey protein", "whey", "creatina", "colágeno", "colageno", "ômega",
         "omega 3", "probiótico", "probiotico", "shampoo", "condicionador",
         "finalizador", "desodorante", "antitranspirante", "sabonete", "proteína",
+        "eucerin", "anti-idade", "antiidade", "epigenetic", "sérum facial", "serum facial",
     ],
     "supermercado": [
         "pringles", "batata frita", "batata frita pringles", "salgadinho", "chocolate",
@@ -194,4 +197,101 @@ def get_category(text: str) -> str | None:
     for category, keywords in CATEGORY_KEYWORDS.items():
         if any(kw in text_lower for kw in keywords):
             return category
+    return None
+
+
+# ------------------------------------------------------------
+# Subtipos de Produtos para controle de Cooldown e Variedade
+# ------------------------------------------------------------
+
+SUBTYPE_KEYWORDS: dict[str, list[str]] = {
+    # Pessoal / Calçados / Acessórios
+    "tenis": ["tênis", "tenis", "sneaker"],
+    "perfume": [
+        "perfume", "eau de toilette", "eau de parfum", "colônia", "colonia",
+        "cologne", "body splash", "body spray"
+    ],
+    "relogio": ["relógio", "relogio", "smartwatch"],
+
+    # Tecnologia & Informática
+    "notebook": ["notebook", "laptop"],
+    "monitor": ["monitor"],
+    "teclado": ["teclado"],
+    "mouse": ["mouse", "mousepad"],
+    "fone": [
+        "fone de ouvido", "fone gamer", "headset", "headset gamer",
+        "headphone", "earbud", "airpod", "zeus lite", "h2232d"
+    ],
+    "armazenamento": ["ssd", "hd externo", "pendrive"],
+    "memoria_ram": [
+        "memória ram", "memoria ram", "memória ddr4", "memoria ddr4",
+        "memória ddr5", "memoria ddr5", "ddr4", "ddr5",
+        "memória para notebook", "memoria para notebook", "sodimm", "so-dimm", "dimm"
+    ],
+    "hardware": ["placa de vídeo", "processador", "fonte", "gabinete", "cooler"],
+    "cadeira_gamer": ["cadeira gamer", "cadeira gaming"],
+
+    # Vestuário & Moda
+    "camiseta": ["camiseta", "camisetas", "camisa", "camisas"],
+    "cueca": ["cueca", "cuecas"],
+    "meia": ["meia", "meias"],
+    "calca": ["calça", "calca", "calças", "calcas", "legging"],
+    "casaco": ["jaqueta", "jaquetas", "moletom", "moletons", "corta vento"],
+    "bermuda": ["bermuda", "bermudas", "shorts"],
+    "vestido": ["vestido", "vestidos", "blusa", "blusas"],
+
+    # Smart Home / Casa
+    "smart_tv": ["smart tv", "tv 4k", "televisão", "televisao", "chromecast", "fire tv stick", "apple tv"],
+    "aspirador": ["robô aspirador", "robo aspirador", "aspirador robô", "aspirador robot"],
+    "fechadura": ["fechadura eletrônica", "fechadura eletronica", "fechadura digital"],
+    "ventilador": ["ventilador de mesa", "ventilador"],
+    "mop_limpeza": ["mop", "esfregão", "esfregao", "balde", "vassoura"],
+    "organizacao": ["organizador", "varal"],
+
+    # Casa e Cozinha
+    "fogao_cooktop": ["fogão", "fogao", "cooktop"],
+    "liquidificador": ["liquidificador", "liquidificadores"],
+    "panelas": [
+        "panela", "panelas", "frigideira", "frigideiras",
+        "jogo de panelas", "jogo de panela", "panela de pressão", "panela de pressao"
+    ],
+
+    # Beleza & Saúde
+    "suplementos": [
+        "whey protein", "whey", "creatina", "colágeno", "colageno",
+        "ômega", "omega 3", "probiótico", "probiotico", "vitamina", "suplemento", "proteína"
+    ],
+    "skincare": [
+        "creme", "sérum", "serum", "sérum facial", "serum facial",
+        "hidratante", "protetor solar", "base", "batom", "máscara",
+        "mascara facial", "esfoliante", "eucerin", "anti-idade", "antiidade", "epigenetic"
+    ],
+    "cabelo": ["shampoo", "condicionador", "finalizador"],
+    "higiene": ["desodorante", "antitranspirante", "sabonete"],
+
+    # Supermercado
+    "snacks": ["pringles", "batata frita", "salgadinho", "chocolate", "biscoito", "bolacha", "snack", "petisco"],
+    "bebidas": ["bebida", "refrigerante"],
+
+    # Livros & Bebê
+    "livros": ["livro", "livros", "ebook", "e-book", "box de livros", "kindle", "mangá", "manga", "hq", "quadrinhos"],
+    "bebe": ["fralda", "fraldas", "lenço umedecido", "lenços umedecidos", "lenco umedecido", "lencos umedecidos", "mamadeira", "chupeta", "huggies", "pampers"],
+}
+
+
+def get_subtype(text: str) -> str | None:
+    """Retorna o subtipo do produto identificado (ex: 'perfume', 'tenis', 'camiseta').
+
+    Útil para cooldown específico de produto e evitar posts repetitivos do mesmo tipo.
+
+    Args:
+        text: Texto bruto da mensagem.
+
+    Returns:
+        Nome do subtipo ou None se nenhum for identificado.
+    """
+    text_lower = text.lower()
+    for subtype, keywords in SUBTYPE_KEYWORDS.items():
+        if any(kw in text_lower for kw in keywords):
+            return subtype
     return None

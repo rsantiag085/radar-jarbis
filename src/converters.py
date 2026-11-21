@@ -63,7 +63,8 @@ _PRODUCT_EMOJIS = {char for char in "💻📺📱🎧🛒🎮🔊🔌💡🧴�
 
 _PRODUCT_KEYWORDS = [
     "notebook", "laptop", "smart tv", "tv", "monitor", "gabinete", "ssd", "teclado", "mouse", "headset",
-    "fone", "smartphone", "celular", "iphone", "galaxy", "philco", "lenovo", "dell", "samsung", "aoc",
+    "headset gamer", "headphone", "fone", "fone de ouvido", "fone gamer", "zeus lite", "h2232d",
+    "smartphone", "celular", "iphone", "galaxy", "philco", "lenovo", "dell", "samsung", "aoc",
     "lg", "tcl", "multilaser", "positivo", "gree", "consul", "brastemp", "electrolux", "midea",
     "ar condicionado", "geladeira", "fogão", "microondas", "fritadeira", "airfryer", "panela", "cafeteira",
     "liquidificador", "batedeira", "aspirador", "ferro", "chuveiro", "ventilador de mesa", "ventilador", "aquecedor", "climatizador",
@@ -79,7 +80,8 @@ _PRODUCT_KEYWORDS = [
     "creatina", "colágeno", "colageno", "ômega", "omega 3", "probiótico", "probiotico", "shampoo",
     "condicionador", "finalizador", "desodorante", "antitranspirante", "sabonete", "proteína",
     "tênis", "tenis", "sneaker", "perfume", "eau de toilette", "eau de parfum", "colônia", "cologne",
-    "relógio", "relogio", "smartwatch", "body splash", "body spray", "leave-in", "cabelo"
+    "relógio", "relogio", "smartwatch", "body splash", "body spray", "leave-in", "cabelo",
+    "eucerin", "anti-idade", "antiidade", "epigenetic", "sérum facial", "serum facial"
 ]
 
 _PRODUCT_BRANDS = [
@@ -93,7 +95,7 @@ _PRODUCT_BRANDS = [
     # Beleza / Skincare / Saúde / Suplementos
     "eudora", "siàge", "siage", "oboticário", "o boticário", "boticario", "natura", "growth",
     "max titanium", "la roche-posay", "la roche posay", "la roche", "cerave", "vichy", "neutrogena",
-    "l'oréal", "loreal", "nivea", "pantene", "dove",
+    "l'oréal", "loreal", "nivea", "pantene", "dove", "eucerin",
     # Esportes / Moda
     "nike", "adidas", "puma", "olympikus", "mizuno", "asics", "under armour",
     # Eletrodomésticos / Casa

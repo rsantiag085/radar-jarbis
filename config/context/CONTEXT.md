@@ -10,7 +10,7 @@ O **RadarJarbis** é uma operação automatizada de canais de ofertas de afiliad
 
 ## Nichos de Atuação (Foco de Garimpo e Filtragem)
 Para manter a relevância comercial e evitar ruído no canal de saída, o sistema filtra as seguintes categorias:
-1. **Itens de Tecnologia:** Notebooks, monitores, teclados, mouses, baterias portáteis, cadeiras gamer, memórias RAM (desktop e notebook - DDR4, DDR5, SODIMM) e periféricos em geral.
+1. **Itens de Tecnologia:** Notebooks, monitores, teclados, mouses, headsets gamer (ex: Redragon, Havit), fones de ouvido, baterias portáteis, cadeiras gamer, memórias RAM (desktop e notebook - DDR4, DDR5, SODIMM) e periféricos em geral.
 2. **Itens Pessoais:** Tênis, perfumes, relógios e body sprays.
 3. **Itens para Casa (Smart Home e Utilidades):** Smart TVs, robôs aspiradores, fechaduras eletrônicas, dispositivos inteligentes, ventilador de mesa, e itens de limpeza/utilidades domésticas (mops, baldes, organizadores, etc.).
 4. **Casa e Cozinha:** Fogões, cooktops, liquidificadores, panelas, frigideiras e jogos de panelas. *(NOTA: Geladeiras, micro-ondas e bebidas alcoólicas são ativamente excluídos)*.

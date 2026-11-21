@@ -25,8 +25,9 @@ Nota sobre transações:
 
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import random
 
 # Caminho do banco de dados local (fora do src/ para não versionar acidentalmente)
 _custom_db = os.getenv("STATE_DB_PATH")
@@ -75,6 +76,20 @@ def _get_conn() -> sqlite3.Connection:
 
         # Adicionar índice na coluna asin para buscas rápidas
         _conn.execute("CREATE INDEX IF NOT EXISTS idx_posted_messages_asin ON posted_messages(asin)")
+
+        # Tabelas de controle de cooldown para categorias e subtipos de produto
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS category_cooldowns (
+                category TEXT PRIMARY KEY,
+                last_posted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        _conn.execute("""
+            CREATE TABLE IF NOT EXISTS subtype_cooldowns (
+                subtype TEXT PRIMARY KEY,
+                last_posted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         _conn.commit()
     return _conn
 
@@ -132,7 +147,7 @@ def asin_already_posted(asin: str, price: str | None = None, within_hours: int =
 
     A janela é de:
     - 48 horas se houver uma baixa de pelo menos 10% no preço em relação à última postagem.
-    - 8 dias (192 horas) caso contrário.
+    - 25 dias (600 horas) caso contrário.
 
     Args:
         asin: O ASIN do produto Amazon (10 caracteres).
@@ -179,8 +194,8 @@ def asin_already_posted(asin: str, price: str | None = None, within_hours: int =
             if current_price_float <= last_price_float * 0.90 + 1e-9:
                 has_10_percent_drop = True
 
-    # Define o limite de tempo (48h ou 8 dias)
-    limit_hours = 48 if has_10_percent_drop else 192  # 8 dias = 192 horas
+    # Define o limite de tempo (48h ou 25 dias)
+    limit_hours = 48 if has_10_percent_drop else 600  # 25 dias = 600 horas
 
     return elapsed_hours < limit_hours
 
@@ -193,7 +208,7 @@ def mark_posted(msg_id: str, asin: str | None = None, price: str | None = None) 
 
     Args:
         msg_id: Identificador único no formato '{chat_id}:{message_id}'.
-        asin: ASIN opcional do produto Amazon.
+        asin: ASIN opcional do produto Amazon ou Item ID do Mercado Livre.
         price: Preço opcional do produto.
     """
     conn = _get_conn()
@@ -202,6 +217,159 @@ def mark_posted(msg_id: str, asin: str | None = None, price: str | None = None) 
             "INSERT OR IGNORE INTO posted_messages (msg_id, asin, price) VALUES (?, ?, ?)",
             (msg_id, asin, price)
         )
+
+
+def is_category_in_cooldown(category: str, minutes: int = 62) -> bool:
+    """Verifica se a categoria está em cooldown (menos de `minutes` minutos desde o último post).
+
+    Args:
+        category: Nome da categoria.
+        minutes: Minutos mínimos exigidos entre posts da mesma categoria.
+
+    Returns:
+        True se estiver em cooldown, False caso contrário.
+    """
+    if not category or minutes <= 0:
+        return False
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT last_posted_at FROM category_cooldowns WHERE category = ?",
+        (category,)
+    ).fetchone()
+
+    if row is None:
+        return False
+
+    last_posted_str = row[0]
+    try:
+        last_posted_dt = datetime.strptime(last_posted_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            last_posted_dt = datetime.fromisoformat(last_posted_str.replace(" ", "T"))
+        except ValueError:
+            return False
+
+    now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    elapsed_minutes = (now_dt - last_posted_dt).total_seconds() / 60.0
+    return elapsed_minutes < minutes
+
+
+def is_subtype_in_cooldown(subtype: str, minutes: int = 62) -> bool:
+    """Verifica se o subtipo de produto está em cooldown (menos de `minutes` minutos desde o último post).
+
+    Args:
+        subtype: Nome do subtipo (ex: 'tenis', 'perfume', 'camiseta').
+        minutes: Minutos mínimos exigidos entre posts do mesmo subtipo.
+
+    Returns:
+        True se estiver em cooldown, False caso contrário.
+    """
+    if not subtype or minutes <= 0:
+        return False
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT last_posted_at FROM subtype_cooldowns WHERE subtype = ?",
+        (subtype,)
+    ).fetchone()
+
+    if row is None:
+        return False
+
+    last_posted_str = row[0]
+    try:
+        last_posted_dt = datetime.strptime(last_posted_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            last_posted_dt = datetime.fromisoformat(last_posted_str.replace(" ", "T"))
+        except ValueError:
+            return False
+
+    now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    elapsed_minutes = (now_dt - last_posted_dt).total_seconds() / 60.0
+    return elapsed_minutes < minutes
+
+
+def is_global_in_cooldown() -> bool:
+    """Verifica se o canal está na janela de cooldown global entre postagens (ex: 7 a 19 min).
+
+    Utiliza a chave especial '__global_next_allowed__' em `category_cooldowns`,
+    onde `last_posted_at` armazena o timestamp UTC a partir do qual o próximo post é permitido.
+    """
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT last_posted_at FROM category_cooldowns WHERE category = '__global_next_allowed__'"
+    ).fetchone()
+
+    if row is None:
+        return False
+
+    next_allowed_str = row[0]
+    try:
+        next_allowed_dt = datetime.strptime(next_allowed_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            next_allowed_dt = datetime.fromisoformat(next_allowed_str.replace(" ", "T"))
+        except ValueError:
+            return False
+
+    now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    return now_dt < next_allowed_dt
+
+
+def record_global_cooldown(min_minutes: int = 7, max_minutes: int = 19) -> float:
+    """Sorteia um delay aleatório entre `min_minutes` e `max_minutes` e grava o timestamp
+    da próxima postagem permitida.
+
+    Returns:
+        O tempo sorteado em minutos (float).
+    """
+    if max_minutes <= 0:
+        return 0.0
+    low = max(0, min(min_minutes, max_minutes))
+    high = max(min_minutes, max_minutes)
+    chosen_minutes = random.uniform(float(low), float(high))
+
+    now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    next_allowed_dt = now_dt + timedelta(minutes=chosen_minutes)
+    next_allowed_str = next_allowed_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = _get_conn()
+    with conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO category_cooldowns (category, last_posted_at) VALUES ('__global_next_allowed__', ?)",
+            (next_allowed_str,),
+        )
+    return round(chosen_minutes, 2)
+
+
+def record_cooldown(
+    category: str | None = None,
+    subtype: str | None = None,
+    min_global_minutes: int = 0,
+    max_global_minutes: int = 0,
+) -> float:
+    """Registra o timestamp atual de postagem para a categoria e/ou subtipo fornecidos
+    e opcionalmente sorteia e registra o cooldown global entre postagens.
+
+    Returns:
+        Minutos sorteados para o cooldown global (0.0 se não aplicado).
+    """
+    conn = _get_conn()
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    with conn:
+        if category:
+            conn.execute(
+                "INSERT OR REPLACE INTO category_cooldowns (category, last_posted_at) VALUES (?, ?)",
+                (category, now_str)
+            )
+        if subtype:
+            conn.execute(
+                "INSERT OR REPLACE INTO subtype_cooldowns (subtype, last_posted_at) VALUES (?, ?)",
+                (subtype, now_str)
+            )
+    if max_global_minutes > 0:
+        return record_global_cooldown(min_minutes=min_global_minutes, max_minutes=max_global_minutes)
+    return 0.0
 
 
 def purge_old_records(days: int = 30) -> int:

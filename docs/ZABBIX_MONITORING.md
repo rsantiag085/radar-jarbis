@@ -85,9 +85,9 @@ Cada bot expõe duas interfaces na sua respectiva porta HTTP (`8000` para Amazon
 
 | Macro | Valor Padrão | Descrição |
 | :--- | :--- | :--- |
-| `{$AMAZON_HOST}` | `35.226.101.128` | IP público ou DNS da VM Amazon no GCP |
+| `{$AMAZON_HOST}` | `127.0.0.1` | IP ou DNS da VM onde roda o bot Amazon |
 | `{$AMAZON_PORT}` | `8000` | Porta de métricas do bot Amazon |
-| `{$MELI_HOST}` | `34.10.13.28` | IP público ou DNS da VM Mercado Livre no GCP |
+| `{$MELI_HOST}` | `127.0.0.1` | IP ou DNS da VM onde roda o bot Mercado Livre |
 | `{$MELI_PORT}` | `8001` | Porta de métricas do bot Mercado Livre |
 
 ---

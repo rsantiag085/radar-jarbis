@@ -493,6 +493,16 @@ class TestIsRelevant(unittest.TestCase):
 
     def test_tecnologia_aprovada(self):
         self.assertTrue(filters.is_relevant("Notebook Dell i5 por R$ 2.499 — 30% off"))
+        self.assertTrue(
+            filters.is_relevant(
+                "Headset Gamer Redragon Zeus Lite Preto\nhttps://meli.la/2Tbwa4p"
+            )
+        )
+        self.assertTrue(
+            filters.is_relevant(
+                "Headset Gamer Havit H2232d\nhttps://a.co/d/09dAAQ5U"
+            )
+        )
 
     def test_smart_home_aprovada(self):
         self.assertTrue(filters.is_relevant("Echo Dot 5ª geração (Alexa) por R$ 199"))
@@ -513,6 +523,16 @@ class TestIsRelevant(unittest.TestCase):
 
     def test_beleza_saude_aprovada(self):
         self.assertTrue(filters.is_relevant("Whey Protein Growth 1kg chocolate R$ 89,90"))
+        self.assertTrue(
+            filters.is_relevant(
+                "EUCERIN Sérum Facial Anti-idade Epigenetic 30ml\nhttps://a.co/d/07sbxRky"
+            )
+        )
+        self.assertTrue(
+            filters.is_relevant(
+                "EUCERIN Sérum Facial Anti-idade Epigenetic 30ml\nhttps://meli.la/1SX7c5x"
+            )
+        )
 
     def test_pessoal_aprovada(self):
         self.assertTrue(filters.is_relevant("Tênis Nike Air Max 36 por R$ 399"))
@@ -643,6 +663,14 @@ class TestGetCategory(unittest.TestCase):
 
     def test_tecnologia(self):
         self.assertEqual(filters.get_category("Notebook Dell i7"), "tecnologia")
+        self.assertEqual(
+            filters.get_category("Headset Gamer Redragon Zeus Lite Preto"),
+            "tecnologia",
+        )
+        self.assertEqual(
+            filters.get_category("Headset Gamer Havit H2232d"),
+            "tecnologia",
+        )
 
     def test_smart_home(self):
         self.assertEqual(filters.get_category("Echo Dot com Alexa"), "smart_home")
@@ -655,6 +683,10 @@ class TestGetCategory(unittest.TestCase):
 
     def test_beleza_saude(self):
         self.assertEqual(filters.get_category("Whey Protein 1kg"), "beleza_saude")
+        self.assertEqual(
+            filters.get_category("EUCERIN Sérum Facial Anti-idade Epigenetic 30ml"),
+            "beleza_saude",
+        )
 
     def test_pessoal(self):
         self.assertEqual(filters.get_category("Tênis Adidas Ultra Boost"), "pessoal")
@@ -794,7 +826,7 @@ class TestExtractAsin(unittest.TestCase):
         self.assertEqual(converters.extract_asin(url4), "B09B8V1C6N")
 
         # 5. Formato com parâmetros na URL
-        url5 = "https://amazon.com.br/dp/B09B8V1C6N/ref=nosim?tag=noradardojarb-20"
+        url5 = "https://amazon.com.br/dp/B09B8V1C6N/ref=nosim?tag=seutag-20"
         self.assertEqual(converters.extract_asin(url5), "B09B8V1C6N")
 
         # 6. Formato com query parameter asin=...
@@ -811,7 +843,7 @@ class TestExtractAsin(unittest.TestCase):
             "🔥 OFERTA PRIME DAY 🔥\n\n"
             "🛒 Notebook Dell Inspiron 15\n"
             "De R$ 4.999 por R$ 2.799,90\n\n"
-            "🔗 Link: https://www.amazon.com.br/dp/B09G3HRMVB?tag=noradardojarb-20\n"
+            "🔗 Link: https://www.amazon.com.br/dp/B09G3HRMVB?tag=seutag-20\n"
         )
         self.assertEqual(converters.extract_asin(text), "B09G3HRMVB")
 

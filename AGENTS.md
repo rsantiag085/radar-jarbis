@@ -7,14 +7,15 @@ Ecossistema Python de automação para canais de afiliados do Telegram (Amazon e
 ## Arquitetura do Sistema
 
 O projeto adota uma **Arquitetura Dual-Client Assíncrona**:
-- **Telethon (MTProto)**: Executa com uma conta de usuário do Telegram para ler `SOURCE_CHANNEL_IDS` em tempo real (`events.NewMessage`) e recupera as 10 mensagens mais recentes ao iniciar ou reconectar.
+- **Telethon (MTProto)**: Executa com uma conta de usuário do Telegram para ler `SOURCE_CHANNEL_IDS` em tempo real (`events.NewMessage`).
 - **python-telegram-bot (Bot API)**: Utilizado exclusivamente para despachar as ofertas filtradas e formatadas para `OUTPUT_CHANNEL_ID` via token de bot (`TELEGRAM_BOT_TOKEN`).
-- **Dois Bots Independentes no Mesmo Repositório**:
-  1. **Bot Amazon** (`src.bot`): Processa links da Amazon (`amzn.to`, `amazon.com.br`, `a.co`), extrai preços, parcelamento, selo Prime e cupons via `src/converters.py` e `src/filters.py`. Porta de métricas padrão: `8000`.
-  2. **Bot Mercado Livre** (`src.bot_meli`): Processa URLs do Mercado Livre, resolve links encurtados/sociais, gera links `meli.la` e formata mensagens via `src/converters_meli.py` e `src/meli.py`. Porta de métricas padrão: `8001`.
+- **Motor Unificado Multi-Plataforma (`src.bot`)**:
+  1. **Fluxo Amazon**: Processa links da Amazon (`amzn.to`, `amazon.com.br`, `a.co`), extrai preços, parcelamento, selo Prime e cupons via `src/converters.py` e `src/filters.py`. Porta de métricas padrão: `8000`.
+  2. **Fluxo Mercado Livre**: Processa URLs do Mercado Livre, resolve links encurtados/sociais, gera links `meli.la` e formata mensagens via `src/converters_meli.py` e `src/meli.py`. Porta de métricas padrão: `8001`.
+  3. **Roteamento Inteligente**: O mesmo processo `src.bot` identifica a plataforma da oferta recebida, aplica deduplicação e cooldown de variedade (7 a 19 min entre postagens gerais e 62 min por categoria/subtipo) no banco SQLite único (`config/state.db`) e expõe ambas as portas de métricas (`8000` e `8001`).
 - **Persistência e Deduplicação**:
   - SQLite local em modo WAL (`config/state.db` ou `config/state_meli.db`) gerenciado por `src/state.py`.
-  - Deduplicação dinâmica por ASIN / Item ID (janela de 48h para queda de preço >= 10% ou 8 dias para o mesmo preço).
+  - Deduplicação dinâmica por ASIN / Item ID (janela de 48h para queda de preço >= 10% ou 25 dias para o mesmo preço).
   - Mídia (fotos/vídeos) é manipulada puramente em memória (`io.BytesIO`) e nunca persistida em banco.
 - **Métricas e Observabilidade**:
   - Módulo `src/metrics.py` expõe endpoints `/metrics` (Prometheus) e `/metrics.json` (Zabbix/HTTP Agent).

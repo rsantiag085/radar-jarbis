@@ -82,10 +82,11 @@ class TestMetricsModule(unittest.TestCase):
             json_provider=lambda: data_to_return,
             addr="127.0.0.1",
         )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
         try:
             # 1. Testa /metrics.json
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics.json", timeout=2) as resp:
+            with opener.open(f"http://127.0.0.1:{port}/metrics.json", timeout=2) as resp:
                 self.assertEqual(resp.status, 200)
                 self.assertIn("application/json", resp.headers.get("Content-Type", ""))
                 body = json.loads(resp.read().decode("utf-8"))
@@ -94,17 +95,18 @@ class TestMetricsModule(unittest.TestCase):
                 self.assertEqual(body["memory_rss_bytes"], 50000000)
 
             # 2. Testa /metrics (Prometheus padrão)
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=2) as resp:
+            with opener.open(f"http://127.0.0.1:{port}/metrics", timeout=2) as resp:
                 self.assertEqual(resp.status, 200)
                 self.assertIn("text/plain", resp.headers.get("Content-Type", ""))
                 text = resp.read().decode("utf-8")
                 self.assertTrue(len(text) > 0)
 
             # 3. Testa /metrics/<key> (Plain text para Zabbix)
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics/messages_received", timeout=2) as resp:
+            with opener.open(f"http://127.0.0.1:{port}/metrics/messages_received", timeout=2) as resp:
                 self.assertEqual(resp.status, 200)
                 self.assertIn("text/plain", resp.headers.get("Content-Type", ""))
                 val = resp.read().decode("utf-8")
                 self.assertEqual(val, "123")
         finally:
             httpd.shutdown()
+            httpd.server_close()

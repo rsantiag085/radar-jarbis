@@ -123,7 +123,7 @@ async def resolve_and_extract_meli_item(url: str, timeout: float = 12.0) -> tupl
 async def generate_meli_affiliate_link(
     item_id: str,
     cookies_str: str,
-    user_id: str = "111993671",
+    user_id: str = "",
     title: str = "",
     permalink: str = ""
 ) -> str | None:

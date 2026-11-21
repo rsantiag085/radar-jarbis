@@ -20,8 +20,8 @@ import httpx
 
 logger = logging.getLogger("radardojarbis.telemetry")
 
-CLICKHOUSE_URL = os.getenv("CLICKHOUSE_OTEL_URL", "http://34.121.123.56:8123")
-ENABLED = os.getenv("OTEL_ENABLED", "true").lower() in ("true", "1", "yes")
+CLICKHOUSE_URL = os.getenv("CLICKHOUSE_OTEL_URL", "")
+ENABLED = bool(CLICKHOUSE_URL) and os.getenv("OTEL_ENABLED", "true").lower() in ("true", "1", "yes")
 
 _client: Optional[httpx.AsyncClient] = None
 
