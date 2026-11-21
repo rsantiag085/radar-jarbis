@@ -80,15 +80,15 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(state.is_subtype_in_cooldown("fone", minutes=62))
         self.assertFalse(state.is_global_in_cooldown())
 
-        # Registra cooldown (categoria + subtipo + global de 7 a 19 min)
+        # Registra cooldown (categoria + subtipo + global de 4 a 14 min)
         chosen = state.record_cooldown(
             category="tecnologia",
             subtype="fone",
-            min_global_minutes=7,
-            max_global_minutes=19,
+            min_global_minutes=4,
+            max_global_minutes=14,
         )
-        self.assertGreaterEqual(chosen, 7.0)
-        self.assertLessEqual(chosen, 19.0)
+        self.assertGreaterEqual(chosen, 4.0)
+        self.assertLessEqual(chosen, 14.0)
         self.assertTrue(state.is_global_in_cooldown())
         self.assertTrue(state.is_category_in_cooldown("tecnologia", minutes=62))
         self.assertTrue(state.is_subtype_in_cooldown("fone", minutes=62))
@@ -199,7 +199,7 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
         await bot.process_message_object(-100222, msg_1)
         self.assertEqual(mock_safe_send.await_count, 1)
 
-        # 2º post de OUTRA categoria (pessoal - tênis) logo em seguida -> bloqueado pelo COOLDOWN GLOBAL (7-19 min)
+        # 2º post de OUTRA categoria (pessoal - tênis) logo em seguida -> bloqueado pelo COOLDOWN GLOBAL (4-14 min)
         msg_other_cat = MagicMock()
         msg_other_cat.id = 202
         msg_other_cat.chat_id = -100222
@@ -210,7 +210,7 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
             "https://www.amazon.com.br/dp/B099999993"
         )
         await bot.process_message_object(-100222, msg_other_cat)
-        self.assertEqual(mock_safe_send.await_count, 1, "Deve bloquear qualquer post durante o cooldown global (7-19 min).")
+        self.assertEqual(mock_safe_send.await_count, 1, "Deve bloquear qualquer post durante o cooldown global (4-14 min).")
 
         # Libera o cooldown global no banco (simulando que passaram 20 minutos), mantendo o de categoria (62 min)
         conn = sqlite3.connect(state.DB_PATH)

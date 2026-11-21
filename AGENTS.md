@@ -12,7 +12,7 @@ O projeto adota uma **Arquitetura Dual-Client Assíncrona**:
 - **Motor Unificado Multi-Plataforma (`src.bot`)**:
   1. **Fluxo Amazon**: Processa links da Amazon (`amzn.to`, `amazon.com.br`, `a.co`), extrai preços, parcelamento, selo Prime e cupons via `src/converters.py` e `src/filters.py`. Porta de métricas padrão: `8000`.
   2. **Fluxo Mercado Livre**: Processa URLs do Mercado Livre, resolve links encurtados/sociais, gera links `meli.la` e formata mensagens via `src/converters_meli.py` e `src/meli.py`. Porta de métricas padrão: `8001`.
-  3. **Roteamento Inteligente**: O mesmo processo `src.bot` identifica a plataforma da oferta recebida, aplica deduplicação e cooldown de variedade (7 a 19 min entre postagens gerais e 62 min por categoria/subtipo) no banco SQLite único (`config/state.db`) e expõe ambas as portas de métricas (`8000` e `8001`).
+  3. **Roteamento Inteligente**: O mesmo processo `src.bot` identifica a plataforma da oferta recebida, aplica deduplicação e cooldown de variedade (4 a 14 min entre postagens gerais e 62 min por categoria/subtipo) no banco SQLite único (`config/state.db`) e expõe ambas as portas de métricas (`8000` e `8001`).
 - **Persistência e Deduplicação**:
   - SQLite local em modo WAL (`config/state.db` ou `config/state_meli.db`) gerenciado por `src/state.py`.
   - Deduplicação dinâmica por ASIN / Item ID (janela de 48h para queda de preço >= 10% ou 25 dias para o mesmo preço).

@@ -276,7 +276,7 @@ def _check_variety_cooldown(
     filtered_counter: prometheus_client.Counter,
     span,
 ) -> bool:
-    """Verifica se o canal está em cooldown global (7-19 min) ou se a categoria/subtipo está em cooldown (62 min).
+    """Verifica se o canal está em cooldown global (4-14 min) ou se a categoria/subtipo está em cooldown (62 min).
 
     Returns:
         True se estiver bloqueado por cooldown, False se puder prosseguir.
@@ -284,8 +284,8 @@ def _check_variety_cooldown(
     if not getattr(settings, "ENABLE_COOLDOWN", False):
         return False
 
-    min_post_cd = getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 7)
-    max_post_cd = getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 19)
+    min_post_cd = getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4)
+    max_post_cd = getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14)
     cat_minutes = getattr(settings, "CATEGORY_COOLDOWN_MINUTES", 62)
     sub_minutes = getattr(settings, "SUBTYPE_COOLDOWN_MINUTES", 62)
 
@@ -444,8 +444,8 @@ async def _process_amazon_pipeline(
             next_cd = state.record_cooldown(
                 category=category,
                 subtype=subtype,
-                min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 7),
-                max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 19),
+                min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4),
+                max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14),
             )
             logger.info(f"[{msg_id}] Cooldown registrado (próximo post liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
         span.log(f"[{msg_id}] Oferta Amazon despachada com sucesso: ASIN={asin}", severity="INFO")
@@ -597,8 +597,8 @@ async def _process_meli_pipeline(
             next_cd = state.record_cooldown(
                 category=category,
                 subtype=subtype,
-                min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 7),
-                max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 19),
+                min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4),
+                max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14),
             )
             logger.info(f"[{msg_id}] Cooldown registrado (próximo post liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
         span.log(f"[{msg_id}] Oferta Meli despachada com sucesso: item_id={item_id}", severity="INFO")

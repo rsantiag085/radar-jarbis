@@ -290,7 +290,7 @@ def is_subtype_in_cooldown(subtype: str, minutes: int = 62) -> bool:
 
 
 def is_global_in_cooldown() -> bool:
-    """Verifica se o canal está na janela de cooldown global entre postagens (ex: 7 a 19 min).
+    """Verifica se o canal está na janela de cooldown global entre postagens (ex: 4 a 14 min).
 
     Utiliza a chave especial '__global_next_allowed__' em `category_cooldowns`,
     onde `last_posted_at` armazena o timestamp UTC a partir do qual o próximo post é permitido.
@@ -316,7 +316,7 @@ def is_global_in_cooldown() -> bool:
     return now_dt < next_allowed_dt
 
 
-def record_global_cooldown(min_minutes: int = 7, max_minutes: int = 19) -> float:
+def record_global_cooldown(min_minutes: int = 4, max_minutes: int = 14) -> float:
     """Sorteia um delay aleatório entre `min_minutes` e `max_minutes` e grava o timestamp
     da próxima postagem permitida.
 
