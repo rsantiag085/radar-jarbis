@@ -181,12 +181,18 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mock_safe_send.await_count, 2, "Duplicata do Meli deve ser bloqueada.")
 
     @patch("src.telemetry.start_span")
+    @patch("src.meli.generate_meli_affiliate_link", new_callable=AsyncMock)
+    @patch("src.meli.resolve_and_extract_meli_item", new_callable=AsyncMock)
     @patch("src.bot._safe_send", new_callable=AsyncMock)
-    async def test_cooldown_blocks_same_category_when_enabled(self, mock_safe_send, mock_span):
+    async def test_cooldown_blocks_same_category_when_enabled(
+        self, mock_safe_send, mock_meli_resolve, mock_meli_gen, mock_span
+    ):
         mock_safe_send.return_value = True
+        mock_meli_resolve.return_value = ("MLB999999", "https://www.mercadolivre.com.br/p/MLB999999")
+        mock_meli_gen.return_value = "https://meli.la/meli999"
         settings.ENABLE_COOLDOWN = True
 
-        # 1º post de tecnologia (notebook)
+        # 1º post Amazon de tecnologia (notebook)
         msg_1 = MagicMock()
         msg_1.id = 201
         msg_1.chat_id = -100222
@@ -199,7 +205,7 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
         await bot.process_message_object(-100222, msg_1)
         self.assertEqual(mock_safe_send.await_count, 1)
 
-        # 2º post de OUTRA categoria (pessoal - tênis) logo em seguida -> bloqueado pelo COOLDOWN GLOBAL (4-14 min)
+        # 2º post Amazon de OUTRA categoria (pessoal - tênis) logo em seguida -> bloqueado pelo COOLDOWN INDIVIDUAL DA AMAZON (4-14 min)
         msg_other_cat = MagicMock()
         msg_other_cat.id = 202
         msg_other_cat.chat_id = -100222
@@ -210,17 +216,30 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
             "https://www.amazon.com.br/dp/B099999993"
         )
         await bot.process_message_object(-100222, msg_other_cat)
-        self.assertEqual(mock_safe_send.await_count, 1, "Deve bloquear qualquer post durante o cooldown global (4-14 min).")
+        self.assertEqual(mock_safe_send.await_count, 1, "Deve bloquear post da Amazon durante o cooldown individual da Amazon (4-14 min).")
 
-        # Libera o cooldown global no banco (simulando que passaram 20 minutos), mantendo o de categoria (62 min)
+        # Post do MERCADO LIVRE de outra categoria (beleza - perfume) dentro do mesmo intervalo -> PERMITIDO (cooldown individual por plataforma!)
+        msg_meli_independent = MagicMock()
+        msg_meli_independent.id = 205
+        msg_meli_independent.chat_id = -100222
+        msg_meli_independent.photo = None
+        msg_meli_independent.text = (
+            "🧴 Perfume Eau de Parfum 100ml\n"
+            "Por R$ 249,00\n"
+            "https://meli.la/2Tbwa4p"
+        )
+        await bot.process_message_object(-100222, msg_meli_independent)
+        self.assertEqual(mock_safe_send.await_count, 2, "Deve permitir 1 post do Meli no intervalo mesmo com a Amazon em cooldown.")
+
+        # Libera o cooldown individual da Amazon no banco (simulando que passaram 15 minutos), mantendo o de categoria (62 min)
         conn = sqlite3.connect(state.DB_PATH)
         conn.execute(
-            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-1 minute') WHERE category = '__global_next_allowed__'"
+            "UPDATE category_cooldowns SET last_posted_at = datetime('now', '-1 minute') WHERE category = '__post_next_allowed_amazon__'"
         )
         conn.commit()
         conn.close()
 
-        # 3º post da mesma categoria (tecnologia - monitor) após o global, mas antes dos 62 min -> bloqueado por CATEGORIA
+        # 3º post Amazon da mesma categoria (tecnologia - monitor) após o cooldown da Amazon, mas antes dos 62 min -> bloqueado por CATEGORIA
         msg_2 = MagicMock()
         msg_2.id = 203
         msg_2.chat_id = -100222
@@ -231,9 +250,9 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
             "https://www.amazon.com.br/dp/B099999992"
         )
         await bot.process_message_object(-100222, msg_2)
-        self.assertEqual(mock_safe_send.await_count, 1, "Deve bloquear o post da mesma categoria dentro de 62 min.")
+        self.assertEqual(mock_safe_send.await_count, 2, "Deve bloquear o post da mesma categoria dentro de 62 min.")
 
-        # 4º post de outra categoria (pessoal - tênis) após o cooldown global -> APROVADO!
+        # 4º post Amazon de outra categoria (pessoal - tênis) após o cooldown individual da Amazon -> APROVADO!
         msg_3 = MagicMock()
         msg_3.id = 204
         msg_3.chat_id = -100222
@@ -244,7 +263,7 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
             "https://www.amazon.com.br/dp/B099999994"
         )
         await bot.process_message_object(-100222, msg_3)
-        self.assertEqual(mock_safe_send.await_count, 2, "Deve permitir post de outra categoria após o cooldown global.")
+        self.assertEqual(mock_safe_send.await_count, 3, "Deve permitir post Amazon de outra categoria após o cooldown da Amazon.")
 
 
 if __name__ == "__main__":

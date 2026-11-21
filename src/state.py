@@ -289,15 +289,17 @@ def is_subtype_in_cooldown(subtype: str, minutes: int = 62) -> bool:
     return elapsed_minutes < minutes
 
 
-def is_global_in_cooldown() -> bool:
-    """Verifica se o canal está na janela de cooldown global entre postagens (ex: 4 a 14 min).
+def is_global_in_cooldown(platform: str | None = None) -> bool:
+    """Verifica se a plataforma (ex: 'amazon' ou 'meli') ou o canal está na janela de cooldown entre postagens (4 a 14 min).
 
-    Utiliza a chave especial '__global_next_allowed__' em `category_cooldowns`,
-    onde `last_posted_at` armazena o timestamp UTC a partir do qual o próximo post é permitido.
+    Utiliza a chave '__post_next_allowed_{platform}__' (ou '__global_next_allowed__' se platform for None)
+    em `category_cooldowns`, onde `last_posted_at` armazena o timestamp UTC da próxima postagem permitida.
     """
+    key = f"__post_next_allowed_{platform}__" if platform else "__global_next_allowed__"
     conn = _get_conn()
     row = conn.execute(
-        "SELECT last_posted_at FROM category_cooldowns WHERE category = '__global_next_allowed__'"
+        "SELECT last_posted_at FROM category_cooldowns WHERE category = ?",
+        (key,),
     ).fetchone()
 
     if row is None:
@@ -316,9 +318,13 @@ def is_global_in_cooldown() -> bool:
     return now_dt < next_allowed_dt
 
 
-def record_global_cooldown(min_minutes: int = 4, max_minutes: int = 14) -> float:
+def record_global_cooldown(
+    min_minutes: int = 4,
+    max_minutes: int = 14,
+    platform: str | None = None,
+) -> float:
     """Sorteia um delay aleatório entre `min_minutes` e `max_minutes` e grava o timestamp
-    da próxima postagem permitida.
+    da próxima postagem permitida para a plataforma informada (ou global se omitida).
 
     Returns:
         O tempo sorteado em minutos (float).
@@ -333,11 +339,12 @@ def record_global_cooldown(min_minutes: int = 4, max_minutes: int = 14) -> float
     next_allowed_dt = now_dt + timedelta(minutes=chosen_minutes)
     next_allowed_str = next_allowed_dt.strftime("%Y-%m-%d %H:%M:%S")
 
+    key = f"__post_next_allowed_{platform}__" if platform else "__global_next_allowed__"
     conn = _get_conn()
     with conn:
         conn.execute(
-            "INSERT OR REPLACE INTO category_cooldowns (category, last_posted_at) VALUES ('__global_next_allowed__', ?)",
-            (next_allowed_str,),
+            "INSERT OR REPLACE INTO category_cooldowns (category, last_posted_at) VALUES (?, ?)",
+            (key, next_allowed_str),
         )
     return round(chosen_minutes, 2)
 
@@ -347,12 +354,13 @@ def record_cooldown(
     subtype: str | None = None,
     min_global_minutes: int = 0,
     max_global_minutes: int = 0,
+    platform: str | None = None,
 ) -> float:
     """Registra o timestamp atual de postagem para a categoria e/ou subtipo fornecidos
-    e opcionalmente sorteia e registra o cooldown global entre postagens.
+    e opcionalmente sorteia e registra o cooldown de postagem individual da plataforma.
 
     Returns:
-        Minutos sorteados para o cooldown global (0.0 se não aplicado).
+        Minutos sorteados para o cooldown de postagem (0.0 se não aplicado).
     """
     conn = _get_conn()
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -368,7 +376,11 @@ def record_cooldown(
                 (subtype, now_str)
             )
     if max_global_minutes > 0:
-        return record_global_cooldown(min_minutes=min_global_minutes, max_minutes=max_global_minutes)
+        return record_global_cooldown(
+            min_minutes=min_global_minutes,
+            max_minutes=max_global_minutes,
+            platform=platform,
+        )
     return 0.0
 
 

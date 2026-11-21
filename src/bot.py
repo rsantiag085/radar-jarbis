@@ -275,8 +275,10 @@ def _check_variety_cooldown(
     subtype: str | None,
     filtered_counter: prometheus_client.Counter,
     span,
+    platform: str | None = None,
 ) -> bool:
-    """Verifica se o canal está em cooldown global (4-14 min) ou se a categoria/subtipo está em cooldown (62 min).
+    """Verifica se a plataforma está em cooldown individual de postagem (4-14 min)
+    ou se a categoria/subtipo está em cooldown (62 min).
 
     Returns:
         True se estiver bloqueado por cooldown, False se puder prosseguir.
@@ -289,13 +291,14 @@ def _check_variety_cooldown(
     cat_minutes = getattr(settings, "CATEGORY_COOLDOWN_MINUTES", 62)
     sub_minutes = getattr(settings, "SUBTYPE_COOLDOWN_MINUTES", 62)
 
-    if max_post_cd > 0 and state.is_global_in_cooldown():
+    if max_post_cd > 0 and state.is_global_in_cooldown(platform=platform):
+        plat_label = platform or "global"
         logger.info(
-            f"[{msg_id}] Descartado: Canal em cooldown global entre postagens ({min_post_cd}-{max_post_cd} min)."
+            f"[{msg_id}] Descartado: Plataforma '{plat_label}' em cooldown entre postagens ({min_post_cd}-{max_post_cd} min)."
         )
         filtered_counter.labels(reason="global_cooldown").inc()
         span.set_attribute("filter.reason", "global_cooldown")
-        span.log(f"[{msg_id}] Canal em cooldown global ({min_post_cd}-{max_post_cd} min).", severity="INFO")
+        span.log(f"[{msg_id}] Plataforma '{plat_label}' em cooldown ({min_post_cd}-{max_post_cd} min).", severity="INFO")
         span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: global_cooldown")
         return True
 
@@ -420,7 +423,7 @@ async def _process_amazon_pipeline(
             span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate_asin_recent")
             return True
 
-        if _check_variety_cooldown(msg_id, category, subtype, OFFERS_FILTERED, span):
+        if _check_variety_cooldown(msg_id, category, subtype, OFFERS_FILTERED, span, platform="amazon"):
             state.mark_posted(msg_id, asin=asin, price=price)
             return True
 
@@ -446,8 +449,9 @@ async def _process_amazon_pipeline(
                 subtype=subtype,
                 min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4),
                 max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14),
+                platform="amazon",
             )
-            logger.info(f"[{msg_id}] Cooldown registrado (próximo post liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
+            logger.info(f"[{msg_id}] Cooldown Amazon registrado (próximo post Amazon liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
         span.log(f"[{msg_id}] Oferta Amazon despachada com sucesso: ASIN={asin}", severity="INFO")
         span.end(status_code="STATUS_CODE_OK", status_message="Published")
         return True
@@ -565,7 +569,7 @@ async def _process_meli_pipeline(
             span.end(status_code="STATUS_CODE_UNSET", status_message="Filtered: duplicate_item_recent")
             return
 
-        if _check_variety_cooldown(msg_id, category, subtype, MELI_OFFERS_FILTERED, span):
+        if _check_variety_cooldown(msg_id, category, subtype, MELI_OFFERS_FILTERED, span, platform="meli"):
             state.mark_posted(msg_id, asin=item_id, price=price)
             return
 
@@ -599,8 +603,9 @@ async def _process_meli_pipeline(
                 subtype=subtype,
                 min_global_minutes=getattr(settings, "POST_COOLDOWN_MIN_MINUTES", 4),
                 max_global_minutes=getattr(settings, "POST_COOLDOWN_MAX_MINUTES", 14),
+                platform="meli",
             )
-            logger.info(f"[{msg_id}] Cooldown registrado (próximo post liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
+            logger.info(f"[{msg_id}] Cooldown Meli registrado (próximo post Meli liberado em {next_cd} min; categoria '{category}' por {getattr(settings, 'CATEGORY_COOLDOWN_MINUTES', 62)} min).")
         span.log(f"[{msg_id}] Oferta Meli despachada com sucesso: item_id={item_id}", severity="INFO")
         span.end(status_code="STATUS_CODE_OK", status_message="Published")
 
