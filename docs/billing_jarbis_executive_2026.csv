@@ -1,0 +1,10 @@
+Mes/Periodo,Projeto,Recursos Ativos,Regra de Faturamento,Compute Engine (R$),Discos e Snapshots (R$),Rede e Outros (R$),Total Estimado (R$),Status
+Jan-Jul/2026,jarbis-executive,Cloud Build / IAM (sem VMs continuas),100% Always Free Tier,0.00,0.00,0.00,0.00,Fechado
+Agosto/2026,jarbis-executive,1 VM (jarbis-radar-free e2-micro a partir de 17/08) + 10GB Disco + Snapshot,1a VM e2-micro gratuita (Free Tier); cobranca residual de snapshot/trafego,0.00,1.45,1.55,3.00,Fechado
+Setembro/2026,jarbis-executive,2 VMs (jarbis-radar-free + radar-jarbis-meli a partir de 12/09) + 20GB Discos,1a VM gratuita + 2a VM faturada pro-rata (18 dias / ~432h),23.50,1.45,1.05,26.00,Fechado
+Outubro/2026,jarbis-executive,2 VMs e2-micro ligadas 24/7 (1.488h totais) + 20GB Discos + Snapshot,744h gratuitas + 744h cobradas da 2a VM e2-micro,38.00,1.50,2.50,42.00,Fechado
+Novembro/2026 (01 a 10/11),jarbis-executive,2 VMs e2-micro ativas simultaneamente (10 dias),2a VM faturada pro-rata (10 dias / ~240h),12.60,0.50,0.90,14.00,Historico Parcial
+Novembro/2026 (11 a 21/11),jarbis-executive,2 VMs e2-micro ativas ate unificacao em 21/11 + Snapshot radar-jarbis-20261121,2a VM faturada pro-rata (11 dias / ~264h),13.80,0.60,0.60,15.00,Historico Parcial
+Novembro/2026 (22 a 30/11),jarbis-executive,1 VM Unificada (jarbis-radar-free RUNNING) + radar-jarbis-meli TERMINATED,100% Free Tier para Compute e Discos; apenas snapshot cobrado,0.00,0.45,0.15,0.60,Pos-Unificacao
+Novembro/2026 (TOTAL MES),jarbis-executive,Consolidado Novembro (21 dias com 2 VMs + 9 dias com 1 VM Unificada),"Economia de ~R$ 11,50 nos ultimos 9 dias do mes",26.40,1.55,1.65,29.60,Projecao Fechamento
+Dezembro/2026 (Projecao),jarbis-executive,1 VM Unificada (Amazon 8000 + Meli 8001) + Snapshot Schedule semanal (14d),"Compute e Discos 100% Free Tier (R$ 0,00); apenas Snapshots (~R$ 1,50)",0.00,1.50,0.30,1.80,Projecao Nova Arquitetura

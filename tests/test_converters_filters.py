@@ -493,6 +493,15 @@ class TestIsRelevant(unittest.TestCase):
 
     def test_tecnologia_aprovada(self):
         self.assertTrue(filters.is_relevant("Notebook Dell i5 por R$ 2.499 — 30% off"))
+        self.assertTrue(filters.is_relevant("iPhone 15 (128 GB) por R$ 3.799,10"))
+        self.assertTrue(filters.is_relevant("PlayStation 5 Slim Digital 825GB por R$ 3.905"))
+        self.assertTrue(filters.is_relevant("Controle Sem Fio Sony DualSense PS5 Branco por R$ 333"))
+        self.assertTrue(filters.is_relevant("Tablet Samsung Galaxy Tab A11+ 128GB por R$ 1.324"))
+        # Bloqueios explícitos solicitados: iPhone 17 e Bundle Nintendo
+        self.assertFalse(filters.is_relevant("Ap\u2060ple iPh\u2060one 17e 512GB por R$ 4.730,00"))
+        self.assertFalse(filters.is_relevant("Apple iPhone 17 256GB por R$ 5.999,00"))
+        self.assertFalse(filters.is_relevant("Bundle Nintendo Switch 2 + EA Sports FC 27 por R$ 3.657,10"))
+        self.assertFalse(filters.is_relevant("Bundle Nintendo Switch Oled + Super Mario Bros. Wonder por R$ 1.594"))
         self.assertTrue(
             filters.is_relevant(
                 "Headset Gamer Redragon Zeus Lite Preto\nhttps://meli.la/2Tbwa4p"
