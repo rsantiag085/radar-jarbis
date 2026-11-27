@@ -6,6 +6,7 @@ Responsabilidades:
 - Formatar o post final com gatilhos mentais (GEMINI.md).
 """
 
+import json
 import re
 import random
 import urllib.parse
@@ -26,6 +27,31 @@ _AMAZON_DOMAINS = (
     "amzn.to",
     "a.co",
     "amazon.com",
+)
+
+# Páginas intermediárias ("bridge pages") que exibem um botão apontando para a loja final
+_BRIDGE_DOMAINS = (
+    "divulgadorinteligente.com",
+)
+
+# Domínios ignorados ao procurar links externos de compra em tags <a> de bridge pages
+_BRIDGE_IGNORED_DOMAINS = (
+    "divulgadorinteligente.com",
+    "whatsapp.com",
+    "instagram.com",
+    "tiktok.com",
+    "facebook.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "threads.net",
+    "pinterest.com",
+    "t.me",
+    "telegram.me",
+    "googletagmanager.com",
+    "google-analytics.com",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
 )
 
 # Padrão para capturar URLs (http e https)
@@ -59,7 +85,7 @@ _DE_PRICE_PATTERN = re.compile(
 _GENERIC_PRICE_PATTERN = re.compile(
     r"\b\d{1,6}(?:\.\d{3})*,\d{2}\b"
 )
-_PRODUCT_EMOJIS = {char for char in "💻📺📱🎧🛒🎮🔊🔌💡🧴👟👕🎒⌨️🖱️⌚💳🖥️📽️📸⚙️📦🗝️🧸" if char != "\ufe0f"}
+_PRODUCT_EMOJIS = {char for char in "💻📺📱🎧🛒🎮🔊🔌💡🧴👟👕🎒⌨️🖱️⌚💳🖥️📽️📸⚙️📦🗝️🧸🛍" if char != "\ufe0f"}
 
 _PRODUCT_KEYWORDS = [
     "notebook", "laptop", "smart tv", "tv", "monitor", "gabinete", "ssd", "teclado", "mouse", "headset",
@@ -271,8 +297,216 @@ def convert_urls(text: str) -> str:
     )
 
 
+_NEXT_DATA_PATTERN = re.compile(
+    r'<script[^>]*id=[\"\']__NEXT_DATA__[\"\'][^>]*>(.*?)</script>',
+    re.IGNORECASE | re.DOTALL,
+)
+
+_META_IMAGE_PATTERNS = (
+    re.compile(
+        r'<meta[^>]+(?:property|name)=[\"\'](?:og:image|twitter:image)[\"\'][^>]+content=[\"\'](https?://[^\"\']+)[\"\']',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'<meta[^>]+content=[\"\'](https?://[^\"\']+)[\"\'][^>]+(?:property|name)=[\"\'](?:og:image|twitter:image)[\"\']',
+        re.IGNORECASE,
+    ),
+)
+
+_AMAZON_PRODUCT_IMAGE_PATTERNS = (
+    re.compile(r'data-old-hires=[\"\'](https?://m\.media-amazon\.com/images/I/[^\"\']+)[\"\']', re.IGNORECASE),
+    re.compile(r'"hiRes"\s*:\s*"(https?://m\.media-amazon\.com/images/I/[^"]+)"', re.IGNORECASE),
+    re.compile(r'<img[^>]+id=[\"\']landingImage[\"\'][^>]+src=[\"\'](https?://m\.media-amazon\.com/images/I/[^\"\']+)[\"\']', re.IGNORECASE),
+)
+
+# Cache leve em memória (URL intermediária -> URL limpa da imagem oficial do produto)
+_BRIDGE_IMAGE_CACHE: dict[str, str] = {}
+_BRIDGE_IMAGE_CACHE_MAX = 128
+
+
+def _is_bridge_url(url: str) -> bool:
+    """Verifica se a URL pertence a uma página intermediária reconhecida (ex.: divulgadorinteligente.com)."""
+    try:
+        netloc = urllib.parse.urlparse(url).netloc.lower()
+    except Exception:
+        return False
+    return any(
+        netloc == domain or netloc.endswith("." + domain)
+        for domain in _BRIDGE_DOMAINS
+    )
+
+
+def has_bridge_url(text: str) -> bool:
+    """Retorna True se o texto contiver alguma URL de página intermediária (ex.: divulgadorinteligente.com)."""
+    if not text:
+        return False
+    return any(_is_bridge_url(m.group(0)) for m in _URL_PATTERN.finditer(text))
+
+
+def cache_bridge_image_url(source_url: str, image_url: str | None) -> None:
+    """Armazena em cache limitado a imagem limpa associada a uma URL de bridge."""
+    if not source_url or not image_url:
+        return
+    if len(_BRIDGE_IMAGE_CACHE) >= _BRIDGE_IMAGE_CACHE_MAX:
+        oldest_key = next(iter(_BRIDGE_IMAGE_CACHE))
+        _BRIDGE_IMAGE_CACHE.pop(oldest_key, None)
+    _BRIDGE_IMAGE_CACHE[source_url] = image_url
+
+
+def extract_bridge_image_url(html: str) -> str | None:
+    """Extrai a URL da imagem oficial limpa do produto (sem moldura do divulgador) do HTML da bridge page."""
+    if not html:
+        return None
+
+    next_match = _NEXT_DATA_PATTERN.search(html)
+    if next_match:
+        try:
+            data = json.loads(next_match.group(1))
+            product = ((data.get("props") or {}).get("pageProps") or {}).get("product") or {}
+            orig_img = (product.get("originalValues") or {}).get("image")
+            if isinstance(orig_img, str) and orig_img.strip().startswith("http"):
+                return orig_img.strip()
+
+            is_custom = bool((product.get("metadata") or {}).get("is_custom_image"))
+            prod_img = product.get("image")
+            if not is_custom and isinstance(prod_img, str) and prod_img.strip().startswith("http"):
+                return prod_img.strip()
+        except Exception:
+            pass
+
+    for pattern in _META_IMAGE_PATTERNS:
+        m = pattern.search(html)
+        if m:
+            candidate = m.group(1).replace("&amp;", "&").strip()
+            if not _is_bridge_url(candidate):
+                return candidate
+
+    return None
+
+
+def extract_store_product_image_url(html: str) -> str | None:
+    """Extrai a URL da imagem oficial diretamente do HTML da loja (Amazon / Mercado Livre)."""
+    if not html:
+        return None
+
+    for pattern in _AMAZON_PRODUCT_IMAGE_PATTERNS:
+        m = pattern.search(html)
+        if m:
+            return m.group(1).replace("&amp;", "&").strip()
+
+    for pattern in _META_IMAGE_PATTERNS:
+        m = pattern.search(html)
+        if m:
+            candidate = m.group(1).replace("&amp;", "&").strip()
+            if not _is_bridge_url(candidate):
+                return candidate
+
+    return None
+
+
+async def fetch_clean_product_image(
+    text: str,
+    fallback_product_url: str = "",
+    pre_resolved_image_url: str | None = None,
+) -> bytes | None:
+    """Baixa em memória os bytes da imagem oficial limpa do produto (Amazon CDN / Meli CDN),
+    ignorando imagens customizadas/molduras de canais terceiros.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+
+    image_url = pre_resolved_image_url
+
+    async with httpx.AsyncClient(follow_redirects=True, timeout=10.0, headers=headers) as client:
+        # 1. Procura imagem limpa nas bridge URLs presentes no texto (usando cache se já expandido)
+        if not image_url and text:
+            for m in _URL_PATTERN.finditer(text):
+                u = m.group(0)
+                if not _is_bridge_url(u):
+                    continue
+                cached = _BRIDGE_IMAGE_CACHE.get(u)
+                if cached:
+                    image_url = cached
+                    break
+                try:
+                    resp = await client.get(u)
+                    extracted = extract_bridge_image_url(resp.text)
+                    if extracted:
+                        cache_bridge_image_url(u, extracted)
+                        image_url = extracted
+                        break
+                except Exception:
+                    continue
+
+        # 2. Fallback: tenta extrair og:image / landingImage diretamente da página da loja
+        if not image_url and fallback_product_url and fallback_product_url.startswith("http"):
+            try:
+                resp = await client.get(fallback_product_url)
+                image_url = extract_store_product_image_url(resp.text)
+            except Exception:
+                image_url = None
+
+        if not image_url:
+            return None
+
+        # 3. Faz o download em memória dos bytes da imagem limpa
+        try:
+            img_resp = await client.get(image_url)
+            content_type = img_resp.headers.get("content-type", "").lower()
+            if img_resp.status_code == 200 and img_resp.content and (
+                content_type.startswith("image/") or len(img_resp.content) > 512
+            ):
+                return img_resp.content
+        except Exception:
+            return None
+
+    return None
+
+
+def extract_bridge_destination_url(html: str) -> tuple[str | None, str | None]:
+    """Extrai (original_url, button_link) do HTML de páginas intermediárias como divulgadorinteligente.com."""
+    if not html:
+        return None, None
+
+    next_match = _NEXT_DATA_PATTERN.search(html)
+    if next_match:
+        try:
+            data = json.loads(next_match.group(1))
+            product = ((data.get("props") or {}).get("pageProps") or {}).get("product") or {}
+            orig_url = (product.get("originalValues") or {}).get("url")
+            btn_link = product.get("link")
+            clean_orig = (
+                orig_url.strip()
+                if isinstance(orig_url, str) and orig_url.strip().startswith("http")
+                else None
+            )
+            clean_btn = (
+                btn_link.strip()
+                if isinstance(btn_link, str) and btn_link.strip().startswith("http")
+                else None
+            )
+            if clean_orig or clean_btn:
+                return clean_orig, clean_btn
+        except Exception:
+            pass
+
+    for href in re.findall(r'<a\b[^>]*\bhref=[\"\'](https?://[^\"\'\s<>]+)[\"\']', html, re.IGNORECASE):
+        clean_href = href.replace("&amp;", "&").strip()
+        try:
+            netloc = urllib.parse.urlparse(clean_href).netloc.lower()
+        except Exception:
+            continue
+        if any(netloc == d or netloc.endswith("." + d) for d in _BRIDGE_IGNORED_DOMAINS):
+            continue
+        return None, clean_href
+
+    return None, None
+
+
 async def expandir_e_converter_link(url_encurtada: str, sua_tag: str | None = None) -> str:
-    """Segue os redirecionamentos de links encurtados e injeta a tag de afiliado."""
+    """Segue os redirecionamentos de links encurtados (incluindo páginas intermediárias) e injeta a tag de afiliado."""
     effective_tag = sua_tag or AFFILIATE_TAG
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     try:
@@ -280,10 +514,44 @@ async def expandir_e_converter_link(url_encurtada: str, sua_tag: str | None = No
         async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
             async with client.stream("GET", url_encurtada, headers=headers) as response:
                 url_final = str(response.url)
-                
+                bridge_html = ""
+                if not _is_amazon_url(url_final) and _is_bridge_url(url_final):
+                    raw_bytes = await response.aread()
+                    bridge_html = raw_bytes.decode("utf-8", errors="ignore")
+
+            if bridge_html:
+                cache_bridge_image_url(url_encurtada, extract_bridge_image_url(bridge_html))
+                orig_url, btn_link = extract_bridge_destination_url(bridge_html)
+                if orig_url and _is_amazon_url(orig_url):
+                    try:
+                        orig_netloc = urllib.parse.urlparse(orig_url).netloc.lower()
+                    except Exception:
+                        orig_netloc = ""
+                    if "amazon.com.br" in orig_netloc or "amazon.com" in orig_netloc:
+                        return _inject_affiliate_tag(orig_url, tag=effective_tag)
+
+                candidate = btn_link or orig_url
+                if candidate:
+                    try:
+                        cand_netloc = urllib.parse.urlparse(candidate).netloc.lower()
+                    except Exception:
+                        cand_netloc = ""
+
+                    if "amazon.com.br" in cand_netloc or "amazon.com" in cand_netloc:
+                        return _inject_affiliate_tag(candidate, tag=effective_tag)
+
+                    if not any(
+                        cand_netloc == d or cand_netloc.endswith("." + d)
+                        for d in ("mercadolivre.com.br", "mercadolivre.com", "mercadolibre.com", "meli.la")
+                    ):
+                        async with client.stream("GET", candidate, headers=headers) as btn_resp:
+                            url_final = str(btn_resp.url)
+                    else:
+                        url_final = candidate
+
         if not _is_amazon_url(url_final):
             return url_final
-            
+
         # Reaproveita a limpeza de lixo e a injeção da tag na URL expandida
         return _inject_affiliate_tag(url_final, tag=effective_tag)
     except Exception as e:
@@ -398,7 +666,9 @@ def _extract_teaser(text: str, product_name: str) -> str:
             clean_flat = clean.replace("**", "").replace("__", "").replace("*", "").strip()
             clean_flat = re.sub(r"^[^\w\s]+", "", clean_flat).strip()
             
-            if clean_flat == product_name:
+            if clean_flat == product_name or (
+                product_name and len(product_name) >= 40 and clean_flat.startswith(product_name)
+            ):
                 return ""
             if _TEASER_EXCLUDE_PATTERN.search(clean):
                 continue
@@ -437,7 +707,7 @@ def _extract_product_name(text: str) -> str:
         if _has_negative_word(clean_lower):
             score -= 50
             
-        if any(p in clean_lower for p in ["notificações", "perder nada", "grupo", "canal", "t.me", "whatsapp", "site confiável", "site seguro", "confiável", "confiavel", "seguro", "site:", "link para", "entrar no grupo", "entrar no canal", "reduza.com"]):
+        if any(p in clean_lower for p in ["notificações", "perder nada", "grupo", "canal", "t.me", "whatsapp", "site confiável", "site seguro", "confiável", "confiavel", "seguro", "site:", "link para", "entrar no grupo", "entrar no canal", "reduza.com", "divulgadorinteligente"]):
             score -= 100
 
         # Termos típicos de frete, venda e promoção que não fazem parte do nome do produto

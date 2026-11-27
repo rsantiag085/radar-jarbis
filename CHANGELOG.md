@@ -2,15 +2,31 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
-## 📌 Onde Paramos? (Última atualização: 2026-07-20)
+## 📌 Onde Paramos? (Última atualização: 2026-11-27)
 
 ### ✅ Concluído nesta sessão:
-- **Deduplicação de ASIN Dinâmica**: Atualizada a barreira de deduplicação por ASIN no SQLite (`state.py`) para utilizar janela de 48h em caso de queda de preço $\ge 10\%$ e 8 dias (192h) para demais casos (preço igual, aumento ou queda menor que 10%).
-- **Suíte de Testes Reajustada**: Modificada a suíte de testes unitários e de integração (`test_deduplication.py`) para validar as novas regras de janela dinâmica de ASIN, totalizando 116 testes bem-sucedidos.
-- **Adequação de Logging e Docs**: Mensagem de descarte no log de `bot.py` e arquivos markdown (`README.md`, `GEMINI.md`, `GUARDRAILS.md`) devidamente atualizados para documentar e refletir o novo comportamento.
+- **Inclusão do canal `@jessicanevilepromo` na instância `jarbis-radar-free`**:
+  - Conta Telethon inscrita no canal **Promoções Jessica Nevile** (`@jessicanevilepromo`, ID `3857632716`) e variável `SOURCE_CHANNEL_IDS` atualizada em produção (totalizando 8 canais master).
+  - **Extração automática de páginas intermediárias (`divulgadorinteligente.com`)**: Implementada leitura estruturada de `__NEXT_DATA__` e fallback por botões HTML `<a href=...>` em `src/converters.py` (Amazon, incluindo expansão de `link.amazon` e injeção da nossa tag de afiliado) e `src/meli.py` (Mercado Livre, extraindo o `MLB`/`MLBU` canônico e gerando o nosso link `meli.la`).
+  - **Substituição Automática de Card de Terceiros pela Foto Oficial Limpa (`src/bot.py`, `src/converters.py`, `src/meli.py`, `src/settings.py`)**: Anúncios vindos de `divulgadorinteligente.com` ou de `CLEAN_IMAGE_CHANNELS` (`@jessicanevilepromo`) nunca repassam o card rosa do Telegram; o bot extrai `originalValues.image` / `og:image` direto do CDN oficial da Amazon (`m.media-amazon.com`) ou Mercado Livre (`http2.mlstatic.com`) em memória (`io.BytesIO`).
+  - **Refinamento de Copywriting**: Reconhecimento do emoji `🛍️` na pontuação de títulos de produto e prevenção de teaser duplicado em títulos longos truncados (`src/converters.py`), validado com 147 testes unitários passando.
 
-### 🚀 Próximos Passos recomendados:
-- **Monitorar o Fluxo**: Verificar no canal de produção se a nova barreira de deduplicação dinâmica de ASIN (48h/8d) está filtrando as ofertas conforme o esperado.
+### ✅ Concluído na sessão anterior (2026-11-26):
+- **Comparação Local vs. VM GCP (`e2-micro` unificada)**: Confirmado via SHA256 que todos os 12 módulos em `src/` e o `requirements.txt` estão 100% idênticos entre o repositório local, o disco da VM e o processo em memória (`radar-jarbis.service`).
+- **Mapeamento de Divergências Operacionais na VM**:
+  - Árvore Git remota defasada em 22 commits (`fca2c7d`) com arquivos `src/` copiados manualmente (`dirty working tree`), faltando `docs/`, `scripts/`, `supabase/` e 4 suítes de testes.
+  - Condição de corrida identificada em `_check_variety_cooldown()` (`src/bot.py`), onde mensagens concorrentes podem atravessar a verificação antes de `state.record_cooldown()`.
+  - Ausência de rotina agendada (`cron` / `systemd timer`) para `state.purge_old_records(days=30)`.
+- **Auditoria de Segurança e Viabilidade no Grafana Cloud (Zero Custo)**:
+  - Validada compatibilidade nativa de métricas (`/metrics` Prometheus com `REGISTRY` unificado na porta `8000`) e logs JSON (`journald` -> Grafana Loki) via **Grafana Alloy** com criptografia TLS 1.3 (HTTPS `443` de saída) e token *write-only*, dentro da cota gratuita do Grafana Cloud e da `e2-micro` (1 GB RAM).
+  - Identificado que `src/telemetry.py` usa formato HTTP específico do ClickHouse (exige adaptação para OTLP/HTTP apenas se desejar Traces no Grafana Tempo).
+  - **Achado crítico de segurança nos logs**: O logger `httpx` herda `logging.INFO` em `src/bot.py` e registra URLs completas da Bot API do Telegram no `journald` local; deve ser silenciado (`WARNING`) e mascarado antes de exportar logs para nuvem.
+
+### 🚀 Próximos Passos recomendados (Retomada):
+1. **Sanitização de Logs (`src/bot.py`)**: Ajustar `logging.getLogger("httpx").setLevel(logging.WARNING)` e `httpcore` para impedir registro de URLs sensíveis no `journald`.
+2. **Hardening de Rede e Portas**: Restringir bind de métricas para `127.0.0.1` (caso o Zabbix externo seja descontinuado), fechar regras de entrada desnecessárias no firewall da VM e restringir SSH ao túnel IAP (`35.235.240.0/20`).
+3. **Implantação do Grafana Alloy (Opção 1 — Zero Custo)**: Configurar `config.alloy` na VM (`GOMEMLIMIT=100MiB`, scrape em `127.0.0.1:8000/metrics` a cada 60s, leitura do `journald` com regex de redação e push TLS 1.3 para o Grafana Cloud).
+4. **Higiene Técnica Opcional**: Alinhar o `git` da VM com `origin/main`, adicionar `asyncio.Lock` por plataforma no cooldown (`src/bot.py`) e configurar `systemd timer` semanal para `purge_old_records(days=30)`.
 
 ---
 

@@ -301,6 +301,68 @@ class TestUnifiedBotAndCooldowns(unittest.IsolatedAsyncioTestCase):
         await bot.process_message_object(-100222, msg_4)
         self.assertEqual(mock_safe_send.await_count, 4, "Deve permitir post Amazon de outra categoria.")
 
+    @patch("src.telemetry.start_span")
+    @patch("src.bot.user_client.download_media", new_callable=AsyncMock)
+    @patch("src.converters.fetch_clean_product_image", new_callable=AsyncMock)
+    @patch("src.meli.generate_meli_affiliate_link", new_callable=AsyncMock)
+    @patch("src.meli.resolve_and_extract_meli_item", new_callable=AsyncMock)
+    @patch("src.converters.expandir_e_converter_link", new_callable=AsyncMock)
+    @patch("src.bot._safe_send", new_callable=AsyncMock)
+    async def test_divulgador_inteligente_routes_amazon_and_falls_back_to_meli(
+        self,
+        mock_safe_send,
+        mock_expand_amz,
+        mock_meli_resolve,
+        mock_meli_gen,
+        mock_fetch_clean_img,
+        mock_download_media,
+        mock_span,
+    ):
+        mock_safe_send.return_value = True
+        mock_fetch_clean_img.return_value = b"CLEAN_STORE_JPEG_BYTES"
+
+        # 1. Oferta Amazon via divulgadorinteligente.com COM card rosa anexado no Telegram (message.photo != None)
+        mock_expand_amz.return_value = "https://www.amazon.com.br/dp/B0BZZK3R5S?tag=seutag-20"
+        msg_amz_bridge = MagicMock()
+        msg_amz_bridge.id = 301
+        msg_amz_bridge.chat_id = -1003857632716
+        msg_amz_bridge.photo = MagicMock()  # Simula o card rosa original do canal da Jessica
+        msg_amz_bridge.text = (
+            "🛍️Máscara Capilar Kérastase Nutritive Masquintense, 200ml\n\n"
+            "💸por R$185,10 🚨🚨\n\n"
+            "👉Link p/ comprar:  https://divulgadorinteligente.com/promosjessicanevile/p/TXLU9Zf3UH"
+        )
+        await bot.process_message_object(-1003857632716, msg_amz_bridge)
+        self.assertEqual(mock_safe_send.await_count, 1)
+        # NUNCA deve baixar o message.photo do Telegram quando vier de divulgadorinteligente / jessicanevilepromo
+        mock_download_media.assert_not_awaited()
+        self.assertEqual(mock_safe_send.await_args_list[0].kwargs.get("photo_bytes"), b"CLEAN_STORE_JPEG_BYTES")
+        self.assertTrue(state.asin_already_posted("B0BZZK3R5S", price="R$ 185,10"))
+
+        # 2. Oferta Mercado Livre via divulgadorinteligente.com (fallback automático do pipeline unknown -> meli)
+        mock_expand_amz.return_value = "https://meli.la/13Duyx3"
+        mock_meli_resolve.return_value = (
+            "MLBU3721832026",
+            "https://www.mercadolivre.com.br/kit-cetaphil/up/MLBU3721832026",
+        )
+        mock_meli_gen.return_value = "https://meli.la/nossoAfiliado99"
+
+        msg_meli_bridge = MagicMock()
+        msg_meli_bridge.id = 302
+        msg_meli_bridge.chat_id = -1003857632716
+        msg_meli_bridge.photo = MagicMock()
+        msg_meli_bridge.text = (
+            "🛍️Kit Cetaphil: 1 Creme Hidratante Neutra 453g + 1 Loção Hidratante Neutra 473ml\n\n"
+            "💸por R$ 88,41 🚨🚨\n\n"
+            "Cupom:  SOHOJEBF\n\n"
+            "👉Link p/ comprar:  https://divulgadorinteligente.com/promosjessicanevile/p/ebpbX004k8"
+        )
+        await bot.process_message_object(-1003857632716, msg_meli_bridge)
+        self.assertEqual(mock_safe_send.await_count, 2)
+        mock_download_media.assert_not_awaited()
+        self.assertEqual(mock_safe_send.await_args_list[1].kwargs.get("photo_bytes"), b"CLEAN_STORE_JPEG_BYTES")
+        self.assertTrue(state.asin_already_posted("MLBU3721832026", price="R$ 88,41"))
+
 
 if __name__ == "__main__":
     unittest.main()

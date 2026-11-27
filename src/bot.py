@@ -333,6 +333,83 @@ def _check_variety_cooldown(
     return False
 
 
+def _should_use_clean_store_image(effective_chat_id: int | str, message, text: str) -> bool:
+    """Define se devemos ignorar a foto enviada no Telegram (ex: moldura rosa do Divulgador Inteligente)
+    e buscar a imagem limpa oficial diretamente da loja (Amazon / Mercado Livre).
+    """
+    if converters.has_bridge_url(text):
+        return True
+
+    clean_channels = getattr(settings, "CLEAN_IMAGE_CHANNELS", set())
+    if not clean_channels:
+        return False
+
+    chat_str = str(effective_chat_id).strip().lower().lstrip("@")
+    chat_no_minus = chat_str.lstrip("-")
+    chat_raw_id = chat_no_minus[3:] if chat_no_minus.startswith("100") and len(chat_no_minus) > 6 else chat_no_minus
+
+    if chat_str in clean_channels or f"-{chat_no_minus}" in clean_channels or chat_raw_id in clean_channels:
+        return True
+
+    chat_obj = getattr(message, "chat", None)
+    username = (getattr(chat_obj, "username", None) or "").strip().lower().lstrip("@")
+    if username and username in clean_channels:
+        return True
+
+    return False
+
+
+async def _obtain_offer_photo_bytes(
+    msg_id: str,
+    effective_chat_id: int | str,
+    message,
+    text: str,
+    fallback_product_url: str,
+    err_counter: prometheus_client.Counter,
+    span,
+    pre_resolved_image_url: str | None = None,
+) -> bytes | None:
+    """Obtém os bytes da foto da oferta:
+    - Se a mensagem vier de bridge page (divulgadorinteligente.com) ou de canal com template próprio,
+      baixa a foto limpa oficial do produto (nunca repassando o card do canal de origem).
+    - Caso contrário, baixa a mídia original do Telegram via Telethon.
+    """
+    if _should_use_clean_store_image(effective_chat_id, message, text):
+        try:
+            clean_bytes = await converters.fetch_clean_product_image(
+                text=text,
+                fallback_product_url=fallback_product_url,
+                pre_resolved_image_url=pre_resolved_image_url,
+            )
+            if clean_bytes:
+                logger.info(
+                    f"[{msg_id}] Imagem oficial limpa do produto baixada da loja (~{len(clean_bytes)} bytes)."
+                )
+                span.log(f"[{msg_id}] Imagem limpa baixada ({len(clean_bytes)} bytes).", severity="DEBUG")
+                return clean_bytes
+            logger.warning(
+                f"[{msg_id}] Não foi possível obter imagem limpa da loja; enviando apenas texto para evitar card de terceiros."
+            )
+            span.log(f"[{msg_id}] Sem imagem limpa disponível; enviando apenas texto.", severity="WARNING")
+        except Exception as e:
+            logger.warning(f"[{msg_id}] Erro ao buscar imagem limpa da loja: {e}. Enviando apenas texto.")
+            err_counter.labels(type="media_download").inc()
+            span.log(f"[{msg_id}] Erro ao buscar imagem limpa: {e}", severity="WARNING")
+        return None
+
+    if message.photo:
+        try:
+            photo_bytes = await user_client.download_media(message, file=bytes)
+            logger.info(f"[{msg_id}] Imagem da oferta baixada com sucesso (~{len(photo_bytes)} bytes).")
+            span.log(f"[{msg_id}] Imagem baixada ({len(photo_bytes)} bytes).", severity="DEBUG")
+            return photo_bytes
+        except Exception as e:
+            warning_msg = f"[{msg_id}] Não foi possível baixar a imagem: {e}. Enviando apenas texto."
+            logger.warning(warning_msg)
+            err_counter.labels(type="media_download").inc()
+            span.log(warning_msg, severity="WARNING")
+    return None
+
 # ------------------------------------------------------------
 # Pipeline Amazon
 # ------------------------------------------------------------
@@ -439,17 +516,16 @@ async def _process_amazon_pipeline(
             state.mark_posted(msg_id, asin=asin, price=price)
             return True
 
-        photo_bytes = None
-        if message.photo:
-            try:
-                photo_bytes = await user_client.download_media(message, file=bytes)
-                logger.info(f"[{msg_id}] Imagem da oferta baixada com sucesso (~{len(photo_bytes)} bytes).")
-                span.log(f"[{msg_id}] Imagem baixada ({len(photo_bytes)} bytes).", severity="DEBUG")
-            except Exception as e:
-                warning_msg = f"[{msg_id}] Não foi possível baixar a imagem: {e}. Enviando apenas texto."
-                logger.warning(warning_msg)
-                ERRORS_TOTAL.labels(type="media_download").inc()
-                span.log(warning_msg, severity="WARNING")
+        fallback_amz_url = f"https://www.amazon.com.br/dp/{asin}" if asin else ""
+        photo_bytes = await _obtain_offer_photo_bytes(
+            msg_id=msg_id,
+            effective_chat_id=effective_chat_id,
+            message=message,
+            text=text,
+            fallback_product_url=fallback_amz_url,
+            err_counter=ERRORS_TOTAL,
+            span=span,
+        )
 
         await asyncio.sleep(settings.RATE_LIMIT_DELAY)
         await _safe_send(formatted, photo_bytes=photo_bytes, platform="amazon")
@@ -599,16 +675,19 @@ async def _process_meli_pipeline(
             teaser=teaser,
         )
 
-        photo_bytes = None
-        if message.photo:
-            try:
-                photo_bytes = await user_client.download_media(message, file=bytes)
-                logger.info(f"[{msg_id}] Imagem da oferta baixada com sucesso (~{len(photo_bytes)} bytes).")
-                span.log(f"[{msg_id}] Imagem baixada ({len(photo_bytes)} bytes).", severity="DEBUG")
-            except Exception as e:
-                logger.warning(f"[{msg_id}] Não foi possível baixar imagem: {e}. Enviando texto.")
-                MELI_ERRORS_TOTAL.labels(type="media_download").inc()
-                span.log(f"[{msg_id}] Falha ao baixar imagem: {e}", severity="WARNING")
+        raw_urls_in_text = converters._URL_PATTERN.findall(text)
+        cached_meli_img = meli.get_cached_image_url(*raw_urls_in_text, affiliate_url)
+        fallback_meli_url = f"https://www.mercadolivre.com.br/p/{item_id}" if item_id else affiliate_url
+        photo_bytes = await _obtain_offer_photo_bytes(
+            msg_id=msg_id,
+            effective_chat_id=effective_chat_id,
+            message=message,
+            text=text,
+            fallback_product_url=fallback_meli_url,
+            err_counter=MELI_ERRORS_TOTAL,
+            span=span,
+            pre_resolved_image_url=cached_meli_img,
+        )
 
         await asyncio.sleep(settings.RATE_LIMIT_DELAY)
         await _safe_send(formatted, photo_bytes=photo_bytes, platform="meli")

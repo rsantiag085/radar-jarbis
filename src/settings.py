@@ -68,6 +68,16 @@ try:
     POST_COOLDOWN_MAX_MINUTES: int = int(os.getenv("POST_COOLDOWN_MAX_MINUTES", "14"))
     ENABLE_COOLDOWN: bool = os.getenv("ENABLE_COOLDOWN", "true").lower() == "true"
 
+    # Canais cujas imagens no Telegram possuem moldura/marca d'água própria (nunca baixar message.photo deles)
+    CLEAN_IMAGE_CHANNELS: set[str] = {
+        x.strip().lower().lstrip("@")
+        for x in os.getenv(
+            "CLEAN_IMAGE_CHANNELS",
+            "jessicanevilepromo,-1003857632716,3857632716",
+        ).split(",")
+        if x.strip()
+    }
+
 except KeyError as e:
     raise RuntimeError(
         f"CRITICAL ERROR: A variável de ambiente obrigatória {e} não foi localizada no arquivo config/.env. "

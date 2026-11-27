@@ -69,6 +69,26 @@ class TestMeliConverters(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(clean_url, "https://www.mercadolivre.com.br/produto-teste/up/MLBU4228166339")
         self.assertNotIn("matt_tool=99999", clean_url, "Deve limpar parâmetros de afiliados do concorrente")
 
+    @patch("httpx.AsyncClient.get")
+    async def test_resolve_and_extract_meli_item_from_divulgador_inteligente(self, mock_get):
+        mock_resp = AsyncMock()
+        mock_resp.url = "https://www.divulgadorinteligente.com/promosjessicanevile/p/ebpbX004k8"
+        mock_resp.text = (
+            '<html><body><a href="https://meli.la/13Duyx3">Ir para a loja</a>'
+            '<script id="__NEXT_DATA__" type="application/json">'
+            '{"props":{"pageProps":{"product":{"seller":"mercadolivre","link":"https://meli.la/13Duyx3",'
+            '"originalValues":{"url":"https://www.mercadolivre.com.br/kit-cetaphil/up/MLBU3721832026?matt_tool=123"}}}}}'
+            '</script></body></html>'
+        )
+        mock_get.return_value = mock_resp
+
+        item_id, clean_url = await meli.resolve_and_extract_meli_item(
+            "https://divulgadorinteligente.com/promosjessicanevile/p/ebpbX004k8"
+        )
+        self.assertEqual(item_id, "MLBU3721832026")
+        self.assertEqual(clean_url, "https://www.mercadolivre.com.br/kit-cetaphil/up/MLBU3721832026")
+        self.assertNotIn("matt_tool", clean_url)
+
 
 if __name__ == "__main__":
     unittest.main()

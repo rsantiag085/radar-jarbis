@@ -770,6 +770,101 @@ class TestExpandirEConverterLink(unittest.IsolatedAsyncioTestCase):
             res = await converters.expandir_e_converter_link(url_encurtada)
             self.assertEqual(res, f"https://www.amazon.com.br/dp/B09G3HRMVB?tag={AFFILIATE_TAG}")
 
+    async def test_deve_extrair_link_amazon_de_divulgador_inteligente_next_data(self):
+        url_bridge = "https://divulgadorinteligente.com/promosjessicanevile/p/TXLU9Zf3UH"
+        html_payload = (
+            '<html><head><link rel="preload" as="image" href="https://m.media-amazon.com/images/I/img.jpg"/></head>'
+            '<body><a href="https://link.amazon/B02bCPReG">Ir para a loja</a>'
+            '<script id="__NEXT_DATA__" type="application/json">'
+            '{"props":{"pageProps":{"product":{"seller":"amazon","link":"https://link.amazon/B02bCPReG",'
+            '"originalValues":{"url":"https://www.amazon.com.br/dp/B0BZZK3R5S/?tag=concorrente-20"}}}}}'
+            '</script></body></html>'
+        ).encode("utf-8")
+
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__.return_value = mock_client
+
+        mock_stream = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.url = httpx.URL("https://www.divulgadorinteligente.com/promosjessicanevile/p/TXLU9Zf3UH")
+        mock_response.aread = AsyncMock(return_value=html_payload)
+        mock_stream.__aenter__.return_value = mock_response
+        mock_client.stream.return_value = mock_stream
+
+        with patch("src.converters.httpx.AsyncClient", return_value=mock_client_context):
+            res = await converters.expandir_e_converter_link(url_bridge)
+            self.assertEqual(res, f"https://www.amazon.com.br/dp/B0BZZK3R5S/?tag={AFFILIATE_TAG}")
+            self.assertNotIn("concorrente-20", res)
+
+    async def test_deve_extrair_e_expandir_botao_curto_amazon_de_divulgador_inteligente(self):
+        url_bridge = "https://divulgadorinteligente.com/promosjessicanevile/p/semOriginalUrl"
+        html_payload = (
+            '<html><body>'
+            '<a href="https://www.instagram.com/jessicanevilee">Instagram</a>'
+            '<a href="https://link.amazon/B02bCPReG">Comprar na Amazon</a>'
+            '</body></html>'
+        ).encode("utf-8")
+
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__.return_value = mock_client
+
+        mock_resp_bridge = MagicMock()
+        mock_resp_bridge.url = httpx.URL("https://www.divulgadorinteligente.com/promosjessicanevile/p/semOriginalUrl")
+        mock_resp_bridge.aread = AsyncMock(return_value=html_payload)
+        mock_stream_bridge = AsyncMock()
+        mock_stream_bridge.__aenter__.return_value = mock_resp_bridge
+
+        mock_resp_amz = MagicMock()
+        mock_resp_amz.url = httpx.URL("https://www.amazon.com.br/dp/B0BZZK3R5S?tag=rival-20")
+        mock_stream_amz = AsyncMock()
+        mock_stream_amz.__aenter__.return_value = mock_resp_amz
+
+        mock_client.stream.side_effect = [mock_stream_bridge, mock_stream_amz]
+
+        with patch("src.converters.httpx.AsyncClient", return_value=mock_client_context):
+            res = await converters.expandir_e_converter_link(url_bridge)
+            self.assertEqual(res, f"https://www.amazon.com.br/dp/B0BZZK3R5S?tag={AFFILIATE_TAG}")
+
+    def test_copywriting_jessica_nevile_emoji_sacola_e_teaser_sem_duplicar(self):
+        text_with_teaser = (
+            "Os melhores jeans!\n"
+            "🛍️Calça Jeans Levi’s® 311 Shaping Skinny Preta 196260513\n\n"
+            "💸por R$108,53 🚨🚨\n\n"
+            "Cupom:  SOHOJEBF\n\n"
+            "👉Link p/ comprar:  https://divulgadorinteligente.com/promosjessicanevile/p/WXX6ioQskk"
+        )
+        pn = converters._extract_product_name(text_with_teaser)
+        self.assertEqual(pn, "Calça Jeans Levi’s® 311 Shaping Skinny Preta 196260513")
+        self.assertEqual(converters._extract_teaser(text_with_teaser, pn), "Os melhores jeans!")
+
+        text_long_product = (
+            "🛍️Kérastase Gloss Absolu Glaze Drops – Finalizador para Todos os Tipos de Cabelos com Tendência ao Frizz\n\n"
+            "💸por R$208,42 🚨🚨\n\n"
+            "👉Link p/ comprar:  https://divulgadorinteligente.com/promosjessicanevile/p/CbAPSAb5wE"
+        )
+        pn_long = converters._extract_product_name(text_long_product)
+        self.assertEqual(converters._extract_teaser(text_long_product, pn_long), "")
+
+    def test_extract_bridge_image_url_ignora_custom_e_pega_original(self):
+        html_payload = (
+            '<html><head><meta property="og:image" content="https://m.media-amazon.com/images/I/fallback.jpg"/></head>'
+            '<body><script id="__NEXT_DATA__" type="application/json">'
+            '{"props":{"pageProps":{"product":{"image":"https://custom.card/pink.jpg",'
+            '"metadata":{"is_custom_image":true},'
+            '"originalValues":{"image":"https://m.media-amazon.com/images/I/71F4bQbSVnL._SS500__QL100_.jpg"}}}}}'
+            '</script></body></html>'
+        )
+        self.assertEqual(
+            converters.extract_bridge_image_url(html_payload),
+            "https://m.media-amazon.com/images/I/71F4bQbSVnL._SS500__QL100_.jpg",
+        )
+
 
 # ===========================================================================
 # 7. PIPELINE COMPLETO ASSÍNCRONO — process_async()
